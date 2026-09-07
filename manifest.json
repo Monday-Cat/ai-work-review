@@ -1,0 +1,9 @@
+{
+	"id": "ai-work-review",
+	"name": "AI Work Review",
+	"version": "0.6.4",
+	"minAppVersion": "1.4.0",
+	"description": "Review and approve AI's work on your markdown vault: rule checks, AI report ingestion, proposal diff with confirmed replacement.",
+	"author": "zhouweijie",
+	"isDesktopOnly": false
+}

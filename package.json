@@ -1,0 +1,24 @@
+{
+	"name": "ai-work-review",
+	"version": "0.6.4",
+	"description": "Review and approve AI's work on your markdown vault: rule checks, AI report ingestion, proposal diff with confirmed replacement.",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node scripts/install-to-vault.mjs",
+		"build:only": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"install:vault": "node scripts/install-to-vault.mjs",
+		"test": "node esbuild.config.mjs test && node test/run.mjs && node test/integration.mjs"
+	},
+	"keywords": ["obsidian", "obsidian-plugin", "ai", "review", "approval"],
+	"author": "zhouweijie",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.14.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "^0.21.5",
+		"obsidian": "^1.5.7",
+		"tslib": "2.6.3",
+		"typescript": "^5.5.4"
+	}
+}
