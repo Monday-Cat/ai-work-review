@@ -8,9 +8,10 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { vaultRootOrExit } from "./vault-root.mjs";
 
 const pluginDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const vaultRoot = process.env.AI_REVIEW_VAULT && path.resolve(process.env.AI_REVIEW_VAULT) || path.resolve(pluginDir, "..", "小说"); // 默认开发 vault
+const vaultRoot = vaultRootOrExit(); // 开发 vault：环境变量 AI_REVIEW_VAULT 或 vaults.local.json 首项
 
 // ---- obsidian 桩 ----
 const notices = [];

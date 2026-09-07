@@ -3,3 +3,5 @@ main.js
 .test/
 *.log
 .DS_Store
+vaults.local.json
+agent-kit.zip

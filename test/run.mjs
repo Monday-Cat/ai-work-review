@@ -3,15 +3,14 @@
  * 用当前 vault 的真实文件跑一遍规则检查，并在末尾输出「模拟审核结果」。
  */
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative, resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, relative } from "node:path";
 import { checkFile, extractTemplateSpec, isInScope, isTemplateLike, matchingFolderPrefix, checkIndexFile, DEFAULT_DRAFT_REGEX } from "../.test/rules.mjs";
 import { parseAiReport } from "../.test/ingest.mjs";
 import { diffLines, diffStats } from "../.test/diff.mjs";
 import { matchTasks, collectDevTasks, extractFieldValue, taskState, stripDatePrefix, shouldUseProjectDocsLayout, isNovelDefaultDevFolders, isUnderNamedFolder, targetFolderOf, setFieldValue, upsertSupplementSection, upsertBugSection, upsertChangeSection, isBugFixReqStatus, isApprovedReqStatus, nextApproveStatus, canRecordRequirementChange } from "../.test/dev.mjs";
+import { vaultRootOrExit } from "./vault-root.mjs";
 
-const pluginDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const vaultRoot = process.env.AI_REVIEW_VAULT && resolve(process.env.AI_REVIEW_VAULT) || resolve(pluginDir, "..", "小说"); // 默认开发 vault
+const vaultRoot = vaultRootOrExit(); // 开发 vault：环境变量 AI_REVIEW_VAULT 或 vaults.local.json 首项
 
 let failed = 0;
 function assert(cond, msg) {

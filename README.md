@@ -105,14 +105,18 @@ Any agent that can read/write files works. For [ZCode](https://zcode.dev) / Clau
 
 Build (`npm install && npm run build:only`) and copy `main.js`, `manifest.json`, `styles.css` into `<vault>/.obsidian/plugins/ai-work-review/`, then enable it in Obsidian settings. Or use `node scripts/install-to-vault.mjs <vault…>`.
 
+For local development, create `vaults.local.json` in the repo root (git-ignored) listing your vault paths — `["/path/to/vault", …]`. All entries are the default install targets of `npm run build`; the first entry doubles as the dev vault for `npm run test`. Machine-specific, never committed.
+
 ## Development
 
 ```bash
 npm install
 npm run test        # unit tests (rule checker, report parser, diff) + full integration test
-npm run build       # typecheck + bundle + install into the default dev vault
+npm run build       # typecheck + bundle + install into the vaults listed in vaults.local.json
 npm run dev         # watch mode
 ```
+
+`vaults.local.json` (git-ignored) holds your local vault paths; without it, pass explicit vault paths to `node scripts/install-to-vault.mjs <vault…>` instead.
 
 Source layout: `rules` (pure checker functions) · `store` (verdict state) · `ingest` (bridge protocol) · `diff` (LCS diff) · `view` (side panel) · `fixmodal` / `adjustmodal` · `settings` · `i18n` · `main`.
 
@@ -129,3 +133,5 @@ Source layout: `rules` (pure checker functions) · `store` (verdict state) · `i
 规则检查（模板完整性、草案标记、引用完整性、索引一致性、状态字段）在本地即时完成；AI 深度审核由终端里的智能体完成并把结构化报告写入 vault 根下的 `.ai-review/` 桥接目录（对 Obsidian 检索隐藏）；修改稿必须经 diff 对照、你点击「应用替换」后才会写入原文件。你还可以在面板里对文件点「调整」写明不足点，意见同步给 AI 生成针对性修改稿——文件只有在你人工标记「通过」后才算定稿。
 
 完整工作流、协议 schema、技能接入方式见上方英文文档；界面语言可在设置中切换（自动 / 中文 / English）。
+
+本机开发：在仓库根建 `vaults.local.json`（不入库）列出你的 vault 路径，`npm run build` 会自动安装到其中全部 vault，首项兼作 `npm run test` 的开发 vault；临时目标用 `node scripts/install-to-vault.mjs <vault…>` 指定。
