@@ -39,11 +39,9 @@ export class AdjustModal extends Modal {
 		const cancel = btnRow.createEl("button", { text: t("adjust.cancel") });
 		cancel.addEventListener("click", () => this.close());
 		ta.addEventListener("keydown", (e) => {
-			if ((e as KeyboardEvent).key === "Enter" && ((e as KeyboardEvent).metaKey || (e as KeyboardEvent).ctrlKey)) {
-				ok.click();
-			}
+			if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) ok.click();
 		});
-		setTimeout(() => ta.focus(), 50);
+		window.setTimeout(() => ta.focus(), 50);
 	}
 
 	onClose(): void {

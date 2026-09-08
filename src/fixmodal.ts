@@ -30,7 +30,7 @@ export class FixModal extends Modal {
 		const bar = content.createDiv({ cls: "nr-fix-bar" });
 		bar.createSpan({ cls: "nr-fix-stats", text: t("fix.stats", { added, removed }) });
 		const toggleWrap = bar.createSpan({ cls: "nr-fix-toggle" });
-		const cb = toggleWrap.createEl("input", { type: "checkbox" }) as HTMLInputElement;
+		const cb = toggleWrap.createEl("input", { type: "checkbox" });
 		cb.checked = this.onlyChanges;
 		toggleWrap.createSpan({ text: t("fix.onlyChanges") });
 		cb.addEventListener("change", () => {
@@ -62,7 +62,7 @@ export class FixModal extends Modal {
 
 		const btnRow = content.createDiv({ cls: "nr-fix-buttons" });
 		const apply = btnRow.createEl("button", { cls: "mod-cta", text: t("fix.apply") });
-		apply.addEventListener("click", async () => {
+		apply.addEventListener("click", () => {
 			const file = this.app.vault.getAbstractFileByPath(this.vaultPath);
 			if (!(file instanceof TFile)) {
 				new Notice(t("notice.targetMissing", { path: this.vaultPath }));
@@ -70,7 +70,7 @@ export class FixModal extends Modal {
 				return;
 			}
 			this.close();
-			await this.plugin.applyProposal(this.vaultPath);
+			void this.plugin.applyProposal(this.vaultPath);
 		});
 		const cancel = btnRow.createEl("button", { text: t("fix.cancel") });
 		cancel.addEventListener("click", () => this.close());

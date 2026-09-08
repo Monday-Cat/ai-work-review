@@ -59,8 +59,3 @@ export const MODULE_CARD_TEMPLATE = `# 模块：<name>
 - **职责**：
 - **业务拆解**：未拆解
 `;
-
-/** @deprecated 兼容旧调用；请用 DEV_DOC_TEMPLATE */
-export const REQ_TEMPLATE = DEV_DOC_TEMPLATE;
-/** @deprecated 兼容旧调用；请用 DEV_DOC_TEMPLATE */
-export const DELIVER_TEMPLATE = DEV_DOC_TEMPLATE;

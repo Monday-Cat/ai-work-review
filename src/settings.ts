@@ -309,7 +309,7 @@ export class AiWorkReviewSettingTab extends PluginSettingTab {
 			.setName(t("settings.clearData.name"))
 			.setDesc(t("settings.clearData.desc"))
 			.addButton((b) =>
-				b.setButtonText(t("settings.clearData.button")).setWarning().onClick(async () => {
+				b.setButtonText(t("settings.clearData.button")).setDestructive().onClick(async () => {
 					await this.plugin.clearStore();
 					new Notice(t("notice.cleared"));
 				}),

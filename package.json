@@ -1,6 +1,6 @@
 {
 	"name": "ai-work-review",
-	"version": "0.7.0",
+	"version": "0.7.1",
 	"description": "Review and approve AI's work on your markdown vault: rule checks, AI report ingestion, proposal diff with confirmed replacement.",
 	"main": "main.js",
 	"scripts": {
@@ -15,7 +15,6 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^20.14.0",
-		"builtin-modules": "^3.3.0",
 		"esbuild": "^0.21.5",
 		"obsidian": "^1.5.7",
 		"tslib": "2.6.3",

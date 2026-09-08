@@ -407,13 +407,15 @@ const en: Dict = {
 
 let current: Dict = zh;
 
+/** 应用语言由宿主注入（Obsidian 环境注入 getLanguage()），保持本模块可在纯 node 测试中使用 */
+let detectAppLang: () => string = () => "";
+export function setLanguageDetector(fn: () => string): void {
+	detectAppLang = fn;
+}
+
 export function detectLang(): "zh" | "en" {
-	try {
-		const stored = window.localStorage.getItem("language");
-		if (stored) return stored.startsWith("zh") ? "zh" : "en";
-	} catch {
-		/* ignore */
-	}
+	const lang = detectAppLang();
+	if (lang) return lang.startsWith("zh") ? "zh" : "en";
 	if (typeof navigator !== "undefined" && navigator.language) return navigator.language.startsWith("zh") ? "zh" : "en";
 	return "en";
 }

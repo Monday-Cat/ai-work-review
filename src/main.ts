@@ -1,10 +1,10 @@
-import { MarkdownView, Notice, Plugin, TFile, normalizePath } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, getLanguage, normalizePath } from "obsidian";
 import { Issue, RuleCheckContext, TemplateSpec, StatusCheck, checkFile, extractTemplateSpec, isInScope, isTemplateLike } from "./rules";
-import { ReviewStore, effectiveStatus, simpleHash } from "./store";
+import { ReviewStore, StoreData, effectiveStatus, simpleHash } from "./store";
 import { parseAiReport } from "./ingest";
 import { AiWorkReviewSettingTab, DEFAULT_SETTINGS, codeProjectDevSettings, needsCodeProjectLayout, parseList, parseStatusChecks, parseTemplateMap } from "./settings";
 import type { AiWorkReviewSettings } from "./settings";
-import { setLang, t } from "./i18n";
+import { setLang, setLanguageDetector, t } from "./i18n";
 import { ReviewView, VIEW_TYPE_AI_WORK_REVIEW } from "./view";
 import {
 	BUG_HEADING,
@@ -27,7 +27,7 @@ import {
 	upsertChangeSection,
 	upsertSupplementSection,
 } from "./dev";
-import { DELIVER_TEMPLATE, REQ_TEMPLATE } from "./dev-templates";
+import { DEV_DOC_TEMPLATE } from "./dev-templates";
 
 export interface ProposalEntry {
 	abs: string;
@@ -35,15 +35,19 @@ export interface ProposalEntry {
 	removed?: number;
 }
 
+interface PersistedState {
+	settings?: Partial<AiWorkReviewSettings>;
+	store?: StoreData | null;
+}
+
 export default class AiWorkReviewPlugin extends Plugin {
 	settings: AiWorkReviewSettings = { ...DEFAULT_SETTINGS };
 	store: ReviewStore = new ReviewStore(null);
-	view: ReviewView | null = null;
 	/** vaultPath → 修改稿信息（来自桥接目录 proposals/） */
 	proposals: Map<string, ProposalEntry> = new Map();
 
 	private async rawLoad(): Promise<void> {
-		const raw = ((await this.loadData()) as any) ?? {};
+		const raw = ((await this.loadData()) as PersistedState | null) ?? {};
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, raw.settings ?? {});
 		this.store = new ReviewStore(raw.store ?? null);
 	}
@@ -71,13 +75,11 @@ export default class AiWorkReviewPlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.rawLoad();
+		setLanguageDetector(getLanguage);
 		this.applyLang();
 		this.addSettingTab(new AiWorkReviewSettingTab(this.app, this));
 
-		this.registerView(VIEW_TYPE_AI_WORK_REVIEW, (leaf) => {
-			this.view = new ReviewView(leaf, this);
-			return this.view;
-		});
+		this.registerView(VIEW_TYPE_AI_WORK_REVIEW, (leaf) => new ReviewView(leaf, this));
 
 		this.addRibbonIcon("clipboard-check", t("command.openPanel"), () => this.activateView());
 
@@ -94,17 +96,13 @@ export default class AiWorkReviewPlugin extends Plugin {
 				if (this.settings.autoIngest) {
 					this.registerInterval(
 						window.setInterval(() => {
-							this.ingestBridge(false);
+							void this.ingestBridge(false);
 						}, 20000),
 					);
 				}
-				this.ingestBridge(false);
+				void this.ingestBridge(false);
 			});
 		});
-	}
-
-	onunload(): void {
-		this.view = null;
 	}
 
 	async activateView(): Promise<void> {
@@ -114,12 +112,20 @@ export default class AiWorkReviewPlugin extends Plugin {
 			leaf = workspace.getRightLeaf(false)!;
 			await leaf.setViewState({ type: VIEW_TYPE_AI_WORK_REVIEW, active: true });
 		}
-		workspace.revealLeaf(leaf);
-		this.view?.render();
+		await workspace.revealLeaf(leaf);
+		await this.activeReviewView()?.render();
+	}
+
+	/** 按需查找当前面板实例，不在插件上长期持有视图引用（避免内存泄漏） */
+	activeReviewView(): ReviewView | null {
+		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_AI_WORK_REVIEW)) {
+			if (leaf.view instanceof ReviewView) return leaf.view;
+		}
+		return null;
 	}
 
 	refreshView(): void {
-		this.view?.render();
+		void this.activeReviewView()?.render();
 	}
 
 	/** 代码项目：模板在技能内，不写进仓库。小说库仍在根目录放需求/交付模板。 */
@@ -141,11 +147,11 @@ export default class AiWorkReviewPlugin extends Plugin {
 
 		if (this.settings.devReqFolder) {
 			await this.ensureFolder(this.settings.devReqFolder);
-			await this.ensureFile(`${this.settings.devReqFolder}/需求模板.md`, REQ_TEMPLATE);
+			await this.ensureFile(`${this.settings.devReqFolder}/需求模板.md`, DEV_DOC_TEMPLATE);
 		}
 		if (this.settings.devDeliverFolder) {
 			await this.ensureFolder(this.settings.devDeliverFolder);
-			await this.ensureFile(`${this.settings.devDeliverFolder}/交付模板.md`, DELIVER_TEMPLATE);
+			await this.ensureFile(`${this.settings.devDeliverFolder}/交付模板.md`, DEV_DOC_TEMPLATE);
 		}
 	}
 

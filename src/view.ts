@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
+import { App, ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import { Issue, isTemplateLike } from "./rules";
 import { effectiveStatus } from "./store";
 import { diffLines } from "./diff";
@@ -357,15 +357,46 @@ export class ReviewView extends ItemView {
 				this.onlyIssues = !this.onlyIssues;
 				void this.render();
 			});
-		actions
-			.createEl("button", { cls: "nr-btn", text: t("action.settings") })
-			.addEventListener("click", () => {
-				const setting = (this.app as any).setting;
-				if (setting) {
-					setting.open();
-					setting.openTabById("ai-work-review");
-				}
-			});
+			actions
+				.createEl("button", { cls: "nr-btn", text: t("action.settings") })
+				.addEventListener("click", () => {
+					const setting = (this.app as App & { setting?: { open(): void; openTabById(id: string): void } }).setting;
+					if (setting) {
+						setting.open();
+						setting.openTabById("ai-work-review");
+					}
+				});
+	}
+
+	/** 打开修改稿对照弹窗：读原文件与修改稿，生成统一 diff */
+	private async openProposalDiff(path: string, abs: string): Promise<void> {
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) {
+			new Notice(t("notice.targetMissing", { path }));
+			return;
+		}
+		let proposalContent: string;
+		try {
+			proposalContent = await this.app.vault.adapter.read(abs);
+		} catch (e) {
+			new Notice(t("notice.readFailed", { msg: (e as Error).message }));
+			return;
+		}
+		const original = await this.app.vault.cachedRead(file);
+		const rows = diffLines(original.split(/\r?\n/), proposalContent.split(/\r?\n/));
+		new FixModal(this.app, this.plugin, path, proposalContent, rows).open();
+	}
+
+	/** 面板「通过」：开发任务走 approveRequirement，普通文件直接记通过 */
+	private async applyVerdictPass(path: string): Promise<void> {
+		if (this.plugin.isReqPath(path)) {
+			await this.plugin.approveRequirement(path);
+			return;
+		}
+		this.plugin.store.applyUserVerdict(path, "pass");
+		await this.plugin.removeAdjustment(path);
+		await this.plugin.saveAll();
+		void this.render();
 	}
 
 	private renderFileRow(container: HTMLElement, path: string, opts?: { omitVerdict?: boolean }): void {
@@ -412,22 +443,8 @@ export class ReviewView extends ItemView {
 			const banner = body.createDiv({ cls: "nr-proposal-banner" });
 			banner.createSpan({ text: t("banner.proposal") });
 			const bbtn = banner.createEl("button", { cls: "nr-btn nr-btn-primary", text: t("banner.view") });
-			bbtn.addEventListener("click", async () => {
-				const file = this.app.vault.getAbstractFileByPath(path);
-				if (!(file instanceof TFile)) {
-					new Notice(t("notice.targetMissing", { path }));
-					return;
-				}
-				let proposalContent: string;
-				try {
-					proposalContent = await this.app.vault.adapter.read(proposal.abs);
-				} catch (e) {
-					new Notice(t("notice.readFailed", { msg: (e as Error).message }));
-					return;
-				}
-				const original = await this.app.vault.cachedRead(file);
-				const rows = diffLines(original.split(/\r?\n/), proposalContent.split(/\r?\n/));
-				new FixModal(this.app, this.plugin, path, proposalContent, rows).open();
+			bbtn.addEventListener("click", () => {
+				void this.openProposalDiff(path, proposal.abs);
 			});
 		}
 
@@ -448,22 +465,15 @@ export class ReviewView extends ItemView {
 			const vbtn = (label: string, cb: () => void, active: boolean) => {
 				verdictRow.createEl("button", { cls: `nr-btn nr-btn-sm ${active ? "nr-btn-active" : ""}`, text: label }).addEventListener("click", cb);
 			};
-			vbtn(t("verdict.pass"), async () => {
-				if (this.plugin.isReqPath(path)) {
-					await this.plugin.approveRequirement(path);
-					return;
-				}
-				store.applyUserVerdict(path, "pass");
-				await this.plugin.removeAdjustment(path);
-				await this.plugin.saveAll();
-				void this.render();
+			vbtn(t("verdict.pass"), () => {
+				void this.applyVerdictPass(path);
 			}, fr?.userVerdict === "pass");
 			vbtn(t("verdict.adjust"), () => {
 				new AdjustModal(this.app, this.plugin, path, fr?.userNote ?? "", this.plugin.isReqPath(path) ? "req" : "file").open();
 			}, fr?.userVerdict === "fail");
 			if (fr?.userVerdict) {
-				vbtn(t("verdict.clear"), async () => {
-					await this.plugin.clearUserVerdict(path);
+				vbtn(t("verdict.clear"), () => {
+					void this.plugin.clearUserVerdict(path);
 				}, false);
 			}
 		}
