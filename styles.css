@@ -78,8 +78,16 @@
 	gap: 6px;
 	padding: 5px 8px;
 	cursor: default;
+	flex-wrap: wrap;
 }
 .nr-file-head:hover { background: var(--background-modifier-hover); }
+.nr-file-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	flex: 1 0 auto;
+	justify-content: flex-end;
+}
 .nr-dot {
 	width: 9px;
 	height: 9px;
@@ -125,7 +133,7 @@
 	font-size: 12px;
 	white-space: pre-wrap;
 }
-.nr-verdict { display: flex; align-items: center; gap: 4px; margin: 6px 0; }
+.nr-verdict { display: flex; align-items: center; gap: 4px; margin: 6px 0; flex-wrap: wrap; }
 .nr-verdict-label { color: var(--text-muted); font-size: 12px; }
 .nr-user-note {
 	background: rgba(210, 153, 34, 0.08);

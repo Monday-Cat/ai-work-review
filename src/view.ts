@@ -2,11 +2,12 @@ import { ItemView, Notice, TFile, WorkspaceLeaf } from "obsidian";
 import { Issue, isTemplateLike } from "./rules";
 import { effectiveStatus } from "./store";
 import { diffLines } from "./diff";
-import { collectDevTasks, DevFileRef, DevTask, DEFAULT_DEV_DOC_FOLDER, canRecordRequirementChange, isBugFixReqStatus, isCloseOutStatus, isUnderNamedFolder, targetFolderOf, taskState } from "./dev";
+import { collectDevTasks, DevFileRef, DevTask, DEFAULT_DEV_DOC_FOLDER, devAuthorActions, isUnderNamedFolder, targetFolderOf, taskState } from "./dev";
 import { t } from "./i18n";
 import type AiWorkReviewPlugin from "./main";
 import { FixModal } from "./fixmodal";
 import { AdjustModal } from "./adjustmodal";
+import { DevEntryModal, UndoModal } from "./devmodals";
 
 export const VIEW_TYPE_AI_WORK_REVIEW = "ai-work-review-view";
 
@@ -256,54 +257,9 @@ export class ReviewView extends ItemView {
 		if (reviewPath) name.addEventListener("click", () => void this.plugin.openAt(reviewPath));
 		if (st.label) head.createSpan({ cls: "nr-badge", text: st.label });
 		if (tk.reqPath) {
-			const status = tk.reqStatus ?? "";
-			const closeOut = isCloseOutStatus(status);
-			const passOn = closeOut ? status.includes("完结") || status.includes("已完成") : status.includes("已通过");
-			const passBtn = head.createEl("button", {
-				cls: `nr-btn nr-btn-sm ${passOn ? "nr-btn-active" : ""}`,
-				text: closeOut ? t("verdict.done") : t("verdict.pass"),
-			});
-			passBtn.addEventListener("click", (e) => {
-				e.stopPropagation();
-				void this.plugin.approveRequirement(tk.reqPath!);
-			});
-			const showAdjust = !closeOut && !canRecordRequirementChange(status);
-			if (showAdjust) {
-				const adjOn = status.includes("调整") && !status.includes("变更");
-				const adjBtn = head.createEl("button", {
-					cls: `nr-btn nr-btn-sm ${adjOn ? "nr-btn-active" : ""}`,
-					text: t("verdict.adjust"),
-				});
-				adjBtn.addEventListener("click", (e) => {
-					e.stopPropagation();
-					const note = this.plugin.store.data.files[tk.reqPath!]?.userNote ?? "";
-					new AdjustModal(this.app, this.plugin, tk.reqPath!, note, "req").open();
-				});
-			}
-			if (canRecordRequirementChange(status)) {
-				const chOn = status.includes("变更中");
-				const chBtn = head.createEl("button", {
-					cls: `nr-btn nr-btn-sm ${chOn ? "nr-btn-active" : ""}`,
-					text: t("verdict.change"),
-				});
-				chBtn.addEventListener("click", (e) => {
-					e.stopPropagation();
-					const note = this.plugin.store.data.files[tk.reqPath!]?.userNote ?? "";
-					new AdjustModal(this.app, this.plugin, tk.reqPath!, note, "change").open();
-				});
-			}
-			if (isBugFixReqStatus(status) || status.includes("开发中") || status.includes("已交付") || status.includes("变更中")) {
-				const bugOn = status.includes("整改中");
-				const bugBtn = head.createEl("button", {
-					cls: `nr-btn nr-btn-sm ${bugOn ? "nr-btn-active" : ""}`,
-					text: t("verdict.bug"),
-				});
-				bugBtn.addEventListener("click", (e) => {
-					e.stopPropagation();
-					const note = this.plugin.store.data.files[tk.reqPath!]?.userNote ?? "";
-					new AdjustModal(this.app, this.plugin, tk.reqPath!, note, "bug").open();
-				});
-			}
+			const actionsEl = head.createDiv({ cls: "nr-file-actions" });
+			// 「需求变更」有未落实条目 = 已对过代码（调整中→变更中 流转），按代码期给按钮
+			this.renderDevAuthorButtons(actionsEl, tk.reqPath, tk.reqStatus ?? "", !!tk.deliverDate || !!tk.pendingChange);
 		}
 		if (reviewPath && this.plugin.proposals.has(reviewPath))
 			head.createSpan({ cls: "nr-badge nr-badge-proposal", text: t("badge.proposal") });
@@ -337,7 +293,47 @@ export class ReviewView extends ItemView {
 		}
 
 		const target = tk.deliverPath ?? tk.reqPath;
-		if (target) this.renderFileRow(body, target);
+		if (target) this.renderFileRow(body, target, { omitVerdict: true });
+	}
+
+	/**
+	 * 开发文档作者按钮。
+	 * 需求阶段：通过 + 调整（按新需求重新生成文档）。
+	 * 对过代码以后：完结 + 缺陷（只记 BUG）+ 需求变更（落地代码）。
+	 * 缺陷/变更走 DevEntryModal：不预填旧意见，避免把上一次的内容带进另一个弹窗。
+	 */
+	private renderDevAuthorButtons(container: HTMLElement, path: string, status: string, delivered: boolean): void {
+		const actions = devAuthorActions(status, delivered);
+		const note = () => this.plugin.store.data.files[path]?.userNote ?? "";
+		const btn = (label: string, active: boolean, onClick: () => void) => {
+			const el = container.createEl("button", { cls: `nr-btn nr-btn-sm ${active ? "nr-btn-active" : ""}`, text: label });
+			el.addEventListener("click", (e) => {
+				e.stopPropagation();
+				onClick();
+			});
+		};
+		const passOn = actions.approve === "done" ? status.includes("完结") || status.includes("已完成") : status.includes("已通过");
+		btn(actions.approve === "done" ? t("verdict.done") : t("verdict.pass"), passOn, () => void this.plugin.approveRequirement(path));
+		if (actions.adjust) {
+			btn(t("verdict.adjust"), status.includes("调整") && !status.includes("变更"), () => {
+				new AdjustModal(this.app, this.plugin, path, note(), "req").open();
+			});
+		}
+		if (actions.bug) {
+			btn(t("verdict.bug"), status.includes("整改中"), () => {
+				new DevEntryModal(this.app, this.plugin, path, "bug").open();
+			});
+		}
+		if (actions.change) {
+			btn(t("verdict.change"), status.includes("变更中"), () => {
+				new DevEntryModal(this.app, this.plugin, path, "change").open();
+			});
+		}
+		if (this.plugin.store.peekUndo(path)) {
+			btn(t("verdict.undo"), false, () => {
+				new UndoModal(this.app, this.plugin, path).open();
+			});
+		}
 	}
 
 	// ==================== 共用部件 ====================
@@ -372,7 +368,7 @@ export class ReviewView extends ItemView {
 			});
 	}
 
-	private renderFileRow(container: HTMLElement, path: string): void {
+	private renderFileRow(container: HTMLElement, path: string, opts?: { omitVerdict?: boolean }): void {
 		const store = this.plugin.store;
 		const fr = store.data.files[path];
 		const { status, origin } = effectiveStatus(fr);
@@ -445,29 +441,31 @@ export class ReviewView extends ItemView {
 			body.createDiv({ cls: "nr-user-note", text: `${t("note.prefix")}${fr.userNote}` });
 		}
 
-		// 人工裁决
-		const verdictRow = body.createDiv({ cls: "nr-verdict" });
-		verdictRow.createSpan({ cls: "nr-verdict-label", text: t("verdict.label") });
-		const vbtn = (label: string, cb: () => void, active: boolean) => {
-			verdictRow.createEl("button", { cls: `nr-btn nr-btn-sm ${active ? "nr-btn-active" : ""}`, text: label }).addEventListener("click", cb);
-		};
-		vbtn(t("verdict.pass"), async () => {
-			if (this.plugin.isReqPath(path)) {
-				await this.plugin.approveRequirement(path);
-				return;
+		// 人工裁决（开发任务的作者按钮在任务行上，这里不再重复成「通过/调整」）
+		if (!opts?.omitVerdict) {
+			const verdictRow = body.createDiv({ cls: "nr-verdict" });
+			verdictRow.createSpan({ cls: "nr-verdict-label", text: t("verdict.label") });
+			const vbtn = (label: string, cb: () => void, active: boolean) => {
+				verdictRow.createEl("button", { cls: `nr-btn nr-btn-sm ${active ? "nr-btn-active" : ""}`, text: label }).addEventListener("click", cb);
+			};
+			vbtn(t("verdict.pass"), async () => {
+				if (this.plugin.isReqPath(path)) {
+					await this.plugin.approveRequirement(path);
+					return;
+				}
+				store.applyUserVerdict(path, "pass");
+				await this.plugin.removeAdjustment(path);
+				await this.plugin.saveAll();
+				void this.render();
+			}, fr?.userVerdict === "pass");
+			vbtn(t("verdict.adjust"), () => {
+				new AdjustModal(this.app, this.plugin, path, fr?.userNote ?? "", this.plugin.isReqPath(path) ? "req" : "file").open();
+			}, fr?.userVerdict === "fail");
+			if (fr?.userVerdict) {
+				vbtn(t("verdict.clear"), async () => {
+					await this.plugin.clearUserVerdict(path);
+				}, false);
 			}
-			store.applyUserVerdict(path, "pass");
-			await this.plugin.removeAdjustment(path);
-			await this.plugin.saveAll();
-			void this.render();
-		}, fr?.userVerdict === "pass");
-		vbtn(t("verdict.adjust"), () => {
-			new AdjustModal(this.app, this.plugin, path, fr?.userNote ?? "", this.plugin.isReqPath(path) ? "req" : "file").open();
-		}, fr?.userVerdict === "fail");
-		if (fr?.userVerdict) {
-			vbtn(t("verdict.clear"), async () => {
-				await this.plugin.clearUserVerdict(path);
-			}, false);
 		}
 
 		// 问题列表

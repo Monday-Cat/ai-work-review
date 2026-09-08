@@ -57,6 +57,7 @@ export const MODULE_CARD_TEMPLATE = `# 模块：<name>
 - **分层**：
 - **页面**：
 - **职责**：
+- **业务拆解**：未拆解
 `;
 
 /** @deprecated 兼容旧调用；请用 DEV_DOC_TEMPLATE */

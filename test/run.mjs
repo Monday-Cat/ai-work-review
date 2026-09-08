@@ -7,7 +7,7 @@ import { join, relative } from "node:path";
 import { checkFile, extractTemplateSpec, isInScope, isTemplateLike, matchingFolderPrefix, checkIndexFile, DEFAULT_DRAFT_REGEX } from "../.test/rules.mjs";
 import { parseAiReport } from "../.test/ingest.mjs";
 import { diffLines, diffStats } from "../.test/diff.mjs";
-import { matchTasks, collectDevTasks, extractFieldValue, taskState, stripDatePrefix, shouldUseProjectDocsLayout, isNovelDefaultDevFolders, isUnderNamedFolder, targetFolderOf, setFieldValue, upsertSupplementSection, upsertBugSection, upsertChangeSection, isBugFixReqStatus, isApprovedReqStatus, nextApproveStatus, canRecordRequirementChange } from "../.test/dev.mjs";
+import { matchTasks, collectDevTasks, extractFieldValue, taskState, stripDatePrefix, shouldUseProjectDocsLayout, isNovelDefaultDevFolders, isUnderNamedFolder, targetFolderOf, setFieldValue, upsertSupplementSection, upsertBugSection, upsertChangeSection, hasPendingChange, removeLatestSectionEntry, nowStamp, todayStamp, isBugFixReqStatus, isApprovedReqStatus, nextApproveStatus, canRecordRequirementChange, canRecordBug, devAuthorActions } from "../.test/dev.mjs";
 import { vaultRootOrExit } from "./vault-root.mjs";
 
 const vaultRoot = vaultRootOrExit(); // 开发 vault：环境变量 AI_REVIEW_VAULT 或 vaults.local.json 首项
@@ -231,16 +231,60 @@ console.log("\n== 8c. 统一开发文档 ==");
 	assert(taskState({ slug: "a", reqStatus: "完结" }).kind === "final", "统一文档完结=final");
 	assert(taskState({ slug: "a", reqStatus: "开发中" }).kind === "active", "统一文档开发中=active");
 	assert(taskState({ slug: "a", reqStatus: "变更中" }).kind === "wait", "需求变更中=wait");
+	assert(taskState({ slug: "a", reqStatus: "调整中" }).kind === "wait", "调整中=wait 等改文档");
 	assert(taskState({ slug: "a", reqStatus: "整改中" }).kind === "active", "添加BUG 整改中=active 不走终态");
 	assert(nextApproveStatus("待审核") === "已通过", "待审核点通过=已通过");
 	assert(nextApproveStatus("开发中") === "完结", "开发中点完结=完结");
 	assert(nextApproveStatus("已交付") === "完结", "已交付点完结=完结");
 	assert(nextApproveStatus("变更中") === "完结", "变更中点完结=完结");
+	assert(nextApproveStatus("调整中", true) === "完结", "对过代码的调整中点完结=完结（hasPendingChange 也算代码期）");
 	assert(nextApproveStatus("已通过") === "已通过", "已通过再点通过仍是已通过");
+	assert(nextApproveStatus("调整", true) === "完结", "交付后点调整再完结仍是完结");
 	assert(isApprovedReqStatus("已通过") && !isApprovedReqStatus("完结") && !isApprovedReqStatus("开发中"), "开工只认已通过");
-	assert(!canRecordRequirementChange("待审核") && !canRecordRequirementChange("调整"), "需求阶段不用需求变更");
-	assert(canRecordRequirementChange("已通过") && canRecordRequirementChange("开发中") && canRecordRequirementChange("完结"), "开工后可用需求变更");
+	assert(!canRecordRequirementChange("待审核") && !canRecordRequirementChange("调整") && !canRecordRequirementChange("已通过"), "需求阶段（含已通过）不用需求变更，改需求走调整");
+	assert(canRecordRequirementChange("开发中") && canRecordRequirementChange("已交付") && canRecordRequirementChange("完结") && canRecordRequirementChange("变更中"), "对过代码以后才可需求变更（代码落地）");
+	{
+		const pending = devAuthorActions("待审核");
+		assert(pending.approve === "pass" && pending.adjust && !pending.bug && !pending.change, "待审核：通过+调整，无缺陷无变更");
+		const approved = devAuthorActions("已通过");
+		assert(approved.approve === "pass" && approved.adjust && !approved.bug && !approved.change, "已通过：通过+调整（改需求走调整重新生成文档）");
+		const delivered = devAuthorActions("已交付");
+		assert(delivered.approve === "done" && delivered.bug && delivered.change && !delivered.adjust, "已交付：完结+缺陷+需求变更（调整只在需求阶段）");
+		const closed = devAuthorActions("完结");
+		assert(closed.approve === "done" && closed.bug && closed.change && !closed.adjust, "完结后仍可写缺陷和需求变更（落地）");
+		const developing = devAuthorActions("开发中");
+		assert(developing.approve === "done" && developing.bug && developing.change && !developing.adjust, "开发中可写缺陷和需求变更");
+		assert(canRecordBug("已交付") && canRecordBug("完结") && !canRecordBug("待审核") && !canRecordBug("已通过"), "缺陷按钮只在开工之后");
+		assert(canRecordBug("调整", true) && !canRecordBug("调整"), "交付后即使状态变成调整仍可写缺陷");
+	}
 	assert(upsertChangeSection("# t\n", "快捷档位只要三档", "2026-09-07").includes("## 需求变更"), "需求变更写入原文档");
+	{
+		const fresh = upsertChangeSection("# t\n", "快捷档位只要三档", "2026-09-07");
+		assert(hasPendingChange(fresh), "刚记的变更（落实未填）= 未落地");
+		const landed = fresh.replace("- **落实**：", "- **落实**：已改金额页，只留三档");
+		assert(!hasPendingChange(landed), "落实填了内容 = 已落地");
+		assert(!hasPendingChange("# t\n\n## 需求变更\n\n## 缺陷记录\n"), "空的需求变更节不算未落地");
+		assert(!hasPendingChange("# t\n"), "没有需求变更节不算未落地");
+		const twoPending = upsertChangeSection(fresh, "再加一档 2000", "2026-09-08 09:30");
+		assert(hasPendingChange(twoPending), "追加第二条变更（未落实）仍是调整中");
+	}
+	{
+		assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(nowStamp(new Date(2026, 8, 8, 9, 5))), "条目时间戳精确到分钟");
+		assert(nowStamp(new Date(2026, 8, 8, 9, 5)) === "2026-09-08 09:05", "分钟补零");
+		// upsert 插在节标题后第一条 → 节内顺序：最新在前
+		const base = "# 开发文档\n\n## 需求变更\n\n### 2026-09-08 09:30\n- 新变更\n- **落实**：\n\n### 2026-09-07 10:00\n- 旧变更\n- **落实**：\n\n## 缺陷记录\n";
+		const r1 = removeLatestSectionEntry(base, "## 需求变更");
+		assert(r1.removed.includes("2026-09-08 09:30") && r1.removed.includes("新变更"), "撤回删除的是最新一条（节标题后第一条）");
+		assert(r1.content.includes("2026-09-07 10:00") && !r1.content.includes("新变更"), "旧条目保留、新条目移除");
+		assert(r1.content.includes("## 缺陷记录"), "后续节不受影响");
+		const r2 = removeLatestSectionEntry(r1.content, "## 需求变更");
+		assert(r2.removed.includes("2026-09-07 10:00"), "连续撤回能删到更早一条");
+		const r3 = removeLatestSectionEntry(r2.content, "## 需求变更");
+		assert(!r3.removed, "节里没条目时不改动");
+		const supp = "# t\n\n## 补充需求\n- （2026-09-08 10:00）新要求\n- （2026-09-07 09:00）旧要求\n";
+		const r4 = removeLatestSectionEntry(supp, "## 补充需求");
+		assert(r4.removed.includes("2026-09-08 10:00") && r4.content.includes("旧要求"), "补充需求撤回删最新一条");
+	}
 	assert(!legacy.some((x) => x.slug === "_模块" || x.slug === "模块"), "模块卡不进入任务列表");
 	const login = legacy.find((x) => x.slug === "登录");
 	assert(!!login && !login.unified && login.deliverPath?.includes("开发交付"), "未合并的旧需求/交付仍配对");

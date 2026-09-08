@@ -21,6 +21,8 @@ export interface DevTask {
 	/** 文档里的「目标目录」：要改的代码路径 */
 	codeTarget?: string;
 	unified?: boolean;
+	/** 「需求变更」节还有未落实的条目：文档已进入代码期（调整中→变更中 流转） */
+	pendingChange?: boolean;
 }
 
 export type TaskKind = "final" | "wait" | "ready" | "active" | "none";
@@ -80,6 +82,7 @@ export function collectDevTasks(docs: DevFileRef[], reqs: DevFileRef[], dels: De
 			deliverDate: extractFieldValue(d.content, "交付日期"),
 			codeTarget: extractFieldValue(d.content, "目标目录"),
 			targetFolder: targetFolderOf(d.path, docFolder),
+			pendingChange: hasPendingChange(d.content),
 		});
 	}
 	for (const t of matchTasks(reqs, dels)) {
@@ -183,11 +186,61 @@ export function upsertChangeSection(content: string, note: string, stamp: string
 	return `${content.trimEnd()}\n\n${CHANGE_HEADING}\n${block}\n`;
 }
 
+/** 「需求变更」节里还有没落地（落实未填内容）的条目：变更没完成，文档处于代码期 */
+export function hasPendingChange(content: string): boolean {
+	const idx = content.indexOf(CHANGE_HEADING);
+	if (idx < 0) return false;
+	let tail = content.slice(idx + CHANGE_HEADING.length);
+	const next = tail.indexOf("\n## ");
+	if (next >= 0) tail = tail.slice(0, next);
+	const blocks = tail.split(/^###\s/m).slice(1);
+	if (blocks.length === 0) return /^[-*]\s+\S/m.test(tail); // 手写变更，未分条目
+	return blocks.some((b) => !/\*\*落实\*\*[:：]\s*\S/.test(b));
+}
+
 export function todayStamp(d = new Date()): string {
 	const y = d.getFullYear();
 	const m = String(d.getMonth() + 1).padStart(2, "0");
 	const day = String(d.getDate()).padStart(2, "0");
 	return `${y}-${m}-${day}`;
+}
+
+/** 条目时间戳：精确到分钟，同一天多条意见也能区分先后 */
+export function nowStamp(d = new Date()): string {
+	const hh = String(d.getHours()).padStart(2, "0");
+	const mm = String(d.getMinutes()).padStart(2, "0");
+	return `${todayStamp(d)} ${hh}:${mm}`;
+}
+
+/**
+ * 删除某节下**最新一条**条目（条目按插入顺序倒挂：节标题后第一条就是最新）。
+ * - 「需求变更」「缺陷记录」：删第一个 `### ` 块（到下一个 `### ` 或节尾）。
+ * - 「补充需求」：删第一行 `- （时间戳）…`。
+ */
+export function removeLatestSectionEntry(content: string, heading: string): { content: string; removed: string } {
+	const idx = content.indexOf(heading);
+	if (idx < 0) return { content, removed: "" };
+	const bodyStart = idx + heading.length;
+	let section = content.slice(bodyStart);
+	const nextSection = section.indexOf("\n## ");
+	const rest = nextSection >= 0 ? section.slice(nextSection) : "";
+	if (nextSection >= 0) section = section.slice(0, nextSection);
+
+	const entryStart = section.search(/^###\s/m);
+	if (entryStart >= 0) {
+		const nextEntry = section.indexOf("\n### ", entryStart);
+		const blockEnd = nextEntry >= 0 ? nextEntry + 1 : section.length;
+		const removed = section.slice(entryStart, blockEnd);
+		const kept = section.slice(0, entryStart) + section.slice(blockEnd);
+		return { content: content.slice(0, bodyStart) + kept.replace(/\n{3,}/g, "\n\n") + rest, removed };
+	}
+	const bullet = section.match(/^[-*]\s+（[^）]+）.*$/m);
+	if (bullet && bullet.index != null) {
+		const removed = bullet[0];
+		const kept = (section.slice(0, bullet.index) + section.slice(bullet.index + removed.length)).replace(/\n{3,}/g, "\n\n");
+		return { content: content.slice(0, bodyStart) + kept + rest, removed };
+	}
+	return { content, removed: "" };
 }
 
 export function isAdjustReqStatus(status: string | undefined): boolean {
@@ -201,17 +254,43 @@ export function isBugFixReqStatus(status: string | undefined): boolean {
 	return s.includes("整改中") || s.includes("已完成") || s.includes("完结");
 }
 
+/** 开工之后才能写缺陷：开发中/已交付/完结/整改中/变更中。需求阶段不行。 */
+export function canRecordBug(status: string | undefined, delivered = false): boolean {
+	return delivered || isCloseOutStatus(status);
+}
+
+export interface DevAuthorActions {
+	approve: "pass" | "done";
+	adjust: boolean;
+	change: boolean;
+	bug: boolean;
+}
+
+/**
+ * 面板作者按钮。
+ * 需求阶段（待审核/调整/已通过）：通过 + 调整（按新需求重新生成文档，不改代码）。
+ * 对过代码以后（开发中/已交付/完结/整改中/变更中）：完结 + 缺陷（只记 BUG）+ 需求变更（改代码落地）。
+ * 三者互不混用：文档的事走调整，已过代码的需求落地走变更，BUG 走缺陷。
+ */
+export function devAuthorActions(status: string | undefined, delivered = false): DevAuthorActions {
+	const closeOut = delivered || isCloseOutStatus(status);
+	return {
+		approve: closeOut ? "done" : "pass",
+		adjust: !closeOut,
+		change: closeOut,
+		bug: closeOut,
+	};
+}
+
 export function isApprovedReqStatus(status: string | undefined): boolean {
 	const s = (status ?? "").trim();
 	return s.includes("已通过") && !s.includes("待") && !s.includes("完结");
 }
 
-/** 待审核点通过=已通过（可开工）；开发中/已交付/整改中点通过=完结 */
-export function nextApproveStatus(current: string | undefined): string {
+/** 待审核点通过=已通过（可开工）；开发中/已交付/整改中点通过=完结。交付后即使状态被改成「调整」也仍完结。 */
+export function nextApproveStatus(current: string | undefined, delivered = false): string {
 	const s = (current ?? "").trim();
-	if (s.includes("开发中") || s.includes("已交付") || s.includes("整改中") || s.includes("已完成") || s.includes("完结") || s.includes("变更中")) {
-		return "完结";
-	}
+	if (delivered || isCloseOutStatus(s)) return "完结";
 	return "已通过";
 }
 
@@ -220,10 +299,9 @@ export function isCloseOutStatus(status: string | undefined): boolean {
 	return s.includes("开发中") || s.includes("已交付") || s.includes("整改中") || s.includes("已完成") || s.includes("完结") || s.includes("变更中");
 }
 
+/** 需求变更只在对过代码以后（开发中/已交付/整改中/完结/变更中）：改代码落地。需求阶段要改需求走「调整」。 */
 export function canRecordRequirementChange(status: string | undefined): boolean {
-	const s = (status ?? "").trim();
-	if (!s || s.includes("待审核") || (s.includes("调整") && !s.includes("变更"))) return false;
-	return s.includes("已通过") || s.includes("开发中") || s.includes("已交付") || s.includes("完结") || s.includes("已完成") || s.includes("变更中") || s.includes("整改中");
+	return isCloseOutStatus(status);
 }
 
 export const DEFAULT_DEV_DOC_FOLDER = "开发文档";

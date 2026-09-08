@@ -7,18 +7,22 @@ import type { AiWorkReviewSettings } from "./settings";
 import { setLang, t } from "./i18n";
 import { ReviewView, VIEW_TYPE_AI_WORK_REVIEW } from "./view";
 import {
+	BUG_HEADING,
+	CHANGE_HEADING,
+	SUPPLEMENT_HEADING,
 	extractFieldValue,
 	isAdjustReqStatus,
 	isApprovedReqStatus,
 	isBugFixReqStatus,
-	canRecordRequirementChange,
+	hasPendingChange,
 	isUnderNamedFolder,
 	DEFAULT_DEV_DOC_FOLDER,
 	nextApproveStatus,
+	nowStamp,
+	removeLatestSectionEntry,
 	setFieldValue,
 	shouldUseProjectDocsLayout,
 	targetFolderOf,
-	todayStamp,
 	upsertBugSection,
 	upsertChangeSection,
 	upsertSupplementSection,
@@ -399,8 +403,13 @@ export default class AiWorkReviewPlugin extends Plugin {
 		if (this.isReqPath(path)) {
 			const file = this.app.vault.getAbstractFileByPath(path);
 			let current = "";
-			if (file instanceof TFile) current = extractFieldValue(await this.app.vault.cachedRead(file), "状态") ?? "";
-			next = nextApproveStatus(current);
+			let delivered = false;
+			if (file instanceof TFile) {
+			const content = await this.app.vault.cachedRead(file);
+			current = extractFieldValue(content, "状态") ?? "";
+			delivered = !!(extractFieldValue(content, "交付日期") ?? "").trim() || hasPendingChange(content);
+			}
+			next = nextApproveStatus(current, delivered);
 			await this.setMarkdownStatus(path, next);
 		}
 		await this.saveAll();
@@ -408,33 +417,113 @@ export default class AiWorkReviewPlugin extends Plugin {
 		this.refreshView();
 	}
 
-	/** 记录调整意见：写入插件状态并同步到桥接目录供 AI 读取 */
-	async applyUserAdjustment(path: string, note: string, kind: "req" | "bug" | "change" | "file" = "file"): Promise<void> {
+	/** 记录调整意见（需求阶段）：按新需求重新生成文档。写入插件状态并同步到桥接目录供 AI 读取 */
+	async applyUserAdjustment(path: string, note: string, kind: "req" | "file" = "file"): Promise<void> {
 		this.store.applyUserVerdict(path, "fail", note);
+		await this.writeAdjustmentBridge(path, note, kind);
+		if (kind === "req" && this.isReqPath(path)) {
+			const stamp = nowStamp();
+			let prevStatus = "";
+			const ok = await this.patchMarkdown(path, (c) => {
+				prevStatus = extractFieldValue(c, "状态") ?? "";
+				return upsertSupplementSection(setFieldValue(c, "状态", "调整中"), note, stamp);
+			});
+			if (ok) this.store.pushUndo({ path, kind: "req", prevStatus, stamp, note });
+		}
+		await this.saveAll();
+		new Notice(t("notice.adjustSaved", { path }));
+		this.refreshView();
+	}
+
+	/** 记缺陷（只针对 BUG，与调整分开）：记入「缺陷记录」，状态「整改中」 */
+	async recordBug(path: string, note: string): Promise<void> {
+		this.store.applyUserVerdict(path, "fail", note);
+		await this.writeAdjustmentBridge(path, note, "bug");
+		if (this.isReqPath(path)) {
+			const stamp = nowStamp();
+			let prevStatus = "";
+			const ok = await this.patchMarkdown(path, (c) => {
+				prevStatus = extractFieldValue(c, "状态") ?? "";
+				return upsertBugSection(setFieldValue(c, "状态", "整改中"), note, stamp);
+			});
+			if (ok) this.store.pushUndo({ path, kind: "bug", prevStatus, stamp, note });
+		}
+		await this.saveAll();
+		new Notice(t("notice.bugSaved", { path }));
+		this.refreshView();
+	}
+
+	/**
+	 * 记需求变更（对过代码以后）：记入「需求变更」，状态先到「调整中」——
+	 * 先用 /dev-review 调整 把变更合入文档定稿，状态再变「变更中」，最后 /dev-review 变更 落地代码。
+	 */
+	async recordChange(path: string, note: string): Promise<void> {
+		this.store.applyUserVerdict(path, "fail", note);
+		await this.writeAdjustmentBridge(path, note, "change");
+		if (this.isReqPath(path)) {
+			const stamp = nowStamp();
+			let prevStatus = "";
+			const ok = await this.patchMarkdown(path, (c) => {
+				prevStatus = extractFieldValue(c, "状态") ?? "";
+				return upsertChangeSection(setFieldValue(c, "状态", "调整中"), note, stamp);
+			});
+			if (ok) this.store.pushUndo({ path, kind: "change", prevStatus, stamp, note });
+		}
+		await this.saveAll();
+		new Notice(t("notice.changeSaved", { path }));
+		this.refreshView();
+	}
+
+	/**
+	 * 撤回该文档最新一条作者意见：删掉文档里对应条目、恢复记录前的状态、
+	 * 清理桥接意见与人工裁决。桥接意见已被 AI 处理（桥接文件被清）时拒绝撤回，避免文档与代码不一致。
+	 */
+	async undoLatestEntry(path: string): Promise<void> {
+		const entry = this.store.peekUndo(path);
+		if (!entry) {
+			new Notice(t("notice.undoNone"));
+			return;
+		}
+		if (!(await this.app.vault.adapter.exists(this.bridgeAdjustPath(path)))) {
+			this.store.popUndo(path);
+			await this.saveAll();
+			new Notice(t("notice.undoProcessed", { path }));
+			return;
+		}
+		const heading = entry.kind === "change" ? CHANGE_HEADING : entry.kind === "bug" ? BUG_HEADING : SUPPLEMENT_HEADING;
+		let removed = "";
+		let mismatch = false;
+		const ok = await this.patchMarkdown(path, (c) => {
+			const res = removeLatestSectionEntry(c, heading);
+			removed = res.removed;
+			if (!removed) return c;
+			if (!removed.includes(entry.stamp)) {
+				mismatch = true;
+				return c;
+			}
+			return setFieldValue(res.content, "状态", entry.prevStatus || "待审核");
+		});
+		this.store.popUndo(path);
+		if (!ok || !removed || mismatch) {
+			await this.saveAll();
+			new Notice(t("notice.undoMissingEntry", { path }));
+			this.refreshView();
+			return;
+		}
+		await this.removeBridgeFile(this.bridgeAdjustPath(path));
+		this.store.applyUserVerdict(path, undefined);
+		await this.saveAll();
+		new Notice(t("notice.undone", { path, status: entry.prevStatus || "待审核" }));
+		this.refreshView();
+	}
+
+	/** 作者意见同步到桥接目录 adjustments/ 供 AI 读取（同一文件只保留最新一条待处理意见） */
+	private async writeAdjustmentBridge(path: string, note: string, kind: string): Promise<void> {
 		await this.ensureBridgeParent(this.bridgeAdjustPath(path));
 		await this.app.vault.adapter.write(
 			this.bridgeAdjustPath(path),
 			JSON.stringify({ schema: "novel-review/adjustment@1", file: path, timestamp: new Date().toISOString(), note, kind }, null, 2),
 		);
-		if (this.isReqPath(path)) {
-			await this.patchMarkdown(path, (c) => {
-				const current = extractFieldValue(c, "状态") ?? "";
-				const resolved =
-					kind === "file"
-						? isBugFixReqStatus(current)
-							? "bug"
-							: canRecordRequirementChange(current)
-								? "change"
-								: "req"
-						: kind;
-				if (resolved === "change") return upsertChangeSection(setFieldValue(c, "状态", "变更中"), note, todayStamp());
-				if (resolved === "bug") return upsertBugSection(setFieldValue(c, "状态", "整改中"), note, todayStamp());
-				return upsertSupplementSection(setFieldValue(c, "状态", "调整"), note, todayStamp());
-			});
-		}
-		await this.saveAll();
-		new Notice(t("notice.adjustSaved", { path }));
-		this.refreshView();
 	}
 
 	/** 清除人工裁决，同时清理桥接目录中的调整意见 */
@@ -444,12 +533,16 @@ export default class AiWorkReviewPlugin extends Plugin {
 		if (this.isReqPath(path)) {
 			const file = this.app.vault.getAbstractFileByPath(path);
 			let current = "";
-			if (file instanceof TFile) current = extractFieldValue(await this.app.vault.cachedRead(file), "状态") ?? "";
+			let content = "";
+			if (file instanceof TFile) content = await this.app.vault.cachedRead(file);
+			current = extractFieldValue(content, "状态") ?? "";
 			const next = current.includes("整改中") || current.includes("完结") || current.includes("已完成")
 				? "完结"
-				: current.includes("变更中") || current.includes("开发中")
-					? "开发中"
-					: "待审核";
+				: current.includes("调整") && hasPendingChange(content)
+					? "调整中" // 对过代码的调整中：变更还没定稿落地，保持调整中
+					: current.includes("变更中") || current.includes("开发中")
+						? "开发中"
+						: "待审核";
 			await this.setMarkdownStatus(path, next);
 		}
 		await this.saveAll();

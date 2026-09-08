@@ -24,9 +24,19 @@ export interface FileReview {
 	history: HistoryEntry[];
 }
 
+/** 撤回栈：每记一条作者意见时压入，撤回时按 path 弹最新一条恢复状态 */
+export interface UndoEntry {
+	path: string;
+	kind: "req" | "bug" | "change";
+	prevStatus: string;
+	stamp: string;
+	note: string;
+}
+
 export interface StoreData {
 	version: number;
 	files: Record<string, FileReview>;
+	undoLog?: UndoEntry[];
 }
 
 export function emptyFileReview(path: string): FileReview {
@@ -66,6 +76,7 @@ export class ReviewStore {
 	data: StoreData = { version: 1, files: {} };
 
 	constructor(data?: StoreData | null) {
+		this.data = data ?? { version: 1, files: {} };
 		if (data && data.files) {
 			this.data = data;
 			// 兼容缺字段
@@ -78,6 +89,31 @@ export class ReviewStore {
 				fr.ruleStatus ??= "unchecked";
 			}
 		}
+		this.data.undoLog ??= [];
+	}
+
+	/** 记一条作者意见时压入撤回栈（只留最近 20 条） */
+	pushUndo(entry: UndoEntry): void {
+		const log = (this.data.undoLog ??= []);
+		log.push(entry);
+		if (log.length > 20) log.splice(0, log.length - 20);
+	}
+
+	/** 弹出该文档最新一条可撤回记录；没有则 undefined */
+	popUndo(path: string): UndoEntry | undefined {
+		const log = this.data.undoLog ?? [];
+		for (let i = log.length - 1; i >= 0; i--) {
+			if (log[i].path === path) return log.splice(i, 1)[0];
+		}
+		return undefined;
+	}
+
+	peekUndo(path: string): UndoEntry | undefined {
+		const log = this.data.undoLog ?? [];
+		for (let i = log.length - 1; i >= 0; i--) {
+			if (log[i].path === path) return log[i];
+		}
+		return undefined;
 	}
 
 	get(path: string): FileReview {
