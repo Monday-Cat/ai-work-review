@@ -7,7 +7,7 @@ import { join, relative } from "node:path";
 import { checkFile, extractTemplateSpec, isInScope, isTemplateLike, matchingFolderPrefix, checkIndexFile, DEFAULT_DRAFT_REGEX } from "../.test/rules.mjs";
 import { parseAiReport } from "../.test/ingest.mjs";
 import { diffLines, diffStats } from "../.test/diff.mjs";
-import { matchTasks, collectDevTasks, extractFieldValue, taskState, stripDatePrefix, shouldUseProjectDocsLayout, isNovelDefaultDevFolders, isUnderNamedFolder, targetFolderOf, setFieldValue, upsertSupplementSection, upsertBugSection, upsertChangeSection, hasPendingChange, removeLatestSectionEntry, nowStamp, todayStamp, isBugFixReqStatus, isApprovedReqStatus, nextApproveStatus, canRecordRequirementChange, canRecordBug, devAuthorActions } from "../.test/dev.mjs";
+import { matchTasks, collectDevTasks, extractFieldValue, taskState, stripDatePrefix, shouldUseProjectDocsLayout, isNovelDefaultDevFolders, isUnderNamedFolder, targetFolderOf, setFieldValue, upsertSupplementSection, upsertBugSection, upsertChangeSection, hasPendingChange, countBugEntries, removeLatestSectionEntry, nowStamp, todayStamp, isBugFixReqStatus, isApprovedReqStatus, nextApproveStatus, canRecordRequirementChange, canRecordBug, devAuthorActions } from "../.test/dev.mjs";
 import { vaultRootOrExit } from "./vault-root.mjs";
 
 const vaultRoot = vaultRootOrExit(); // 开发 vault：环境变量 AI_REVIEW_VAULT 或 vaults.local.json 首项
@@ -188,6 +188,27 @@ console.log("\n== 8. 开发模式：任务配对 ==");
 	assert(isNovelDefaultDevFolders("docs/开发需求", "docs/开发交付") === false, "项目 docs 目录不算小说默认");
 }
 
+console.log("\n== 8d. 缺陷统计（防复发回归清单） ==");
+{
+	assert(JSON.stringify(countBugEntries("# t\n")) === '{"total":0,"pending":0}', "没有缺陷记录节=0/0");
+	assert(JSON.stringify(countBugEntries("# t\n\n## 缺陷记录\n")) === '{"total":0,"pending":0}', "空的缺陷记录节=0/0");
+	const fresh = upsertBugSection("# t\n", "倒计时未返回", "2026-09-07");
+	assert(JSON.stringify(countBugEntries(fresh)) === '{"total":1,"pending":1}', "刚记的缺陷（整改未填）=1 条未整改");
+	const fixed = fresh.replace("- **整改**：", "- **整改**：回到金额页\n- **根因**：倒计时回调里没做导航");
+	assert(JSON.stringify(countBugEntries(fixed)) === '{"total":1,"pending":0}', "整改填了内容=已修复");
+	const two = upsertBugSection(fixed, "金额显示旧值", "2026-09-08");
+	assert(JSON.stringify(countBugEntries(two)) === '{"total":2,"pending":1}', "追加第二条后=2 条、1 未整改");
+	const endScoped = "# t\n\n## 缺陷记录\n\n### 2026-09-07\n- a\n- **整改**：x\n\n## 审核意见\n- 无\n";
+	assert(JSON.stringify(countBugEntries(endScoped)) === '{"total":1,"pending":0}', "统计不越过下一节");
+	const tasks = collectDevTasks(
+		[{ path: "docs/开发文档/finance/2026-09-07-充值.md", content: "- **状态**：整改中\n" + two }],
+		[],
+		[],
+		"开发文档",
+	);
+	assert(tasks[0].bugTotal === 2 && tasks[0].bugPending === 1, "统一文档任务带缺陷统计（2 条/1 未整改）");
+}
+
 console.log("\n== 8b. 嵌套目录审核范围 ==");
 {
 	assert(matchingFolderPrefix("lib/features/finance/开发需求/a.md", ["docs/开发需求", "docs/开发交付"]) === "docs/开发需求", "按目录名匹配功能下的开发需求");
@@ -237,16 +258,20 @@ console.log("\n== 8c. 统一开发文档 ==");
 	assert(nextApproveStatus("开发中") === "完结", "开发中点完结=完结");
 	assert(nextApproveStatus("已交付") === "完结", "已交付点完结=完结");
 	assert(nextApproveStatus("变更中") === "完结", "变更中点完结=完结");
-	assert(nextApproveStatus("调整中", true) === "完结", "对过代码的调整中点完结=完结（hasPendingChange 也算代码期）");
-	assert(nextApproveStatus("已通过") === "已通过", "已通过再点通过仍是已通过");
-	assert(nextApproveStatus("调整", true) === "完结", "交付后点调整再完结仍是完结");
+assert(nextApproveStatus("调整中", true) === "变更中", "对过代码的调整中点定稿=变更中（hasPendingChange 也算代码期）");
+assert(nextApproveStatus("已通过") === "已通过", "已通过再点通过仍是已通过");
+assert(nextApproveStatus("调整", true) === "变更中", "交付后状态被改成调整：定稿进入变更中，不直接完结");
 	assert(isApprovedReqStatus("已通过") && !isApprovedReqStatus("完结") && !isApprovedReqStatus("开发中"), "开工只认已通过");
 	assert(!canRecordRequirementChange("待审核") && !canRecordRequirementChange("调整") && !canRecordRequirementChange("已通过"), "需求阶段（含已通过）不用需求变更，改需求走调整");
 	assert(canRecordRequirementChange("开发中") && canRecordRequirementChange("已交付") && canRecordRequirementChange("完结") && canRecordRequirementChange("变更中"), "对过代码以后才可需求变更（代码落地）");
 	{
-		const pending = devAuthorActions("待审核");
-		assert(pending.approve === "pass" && pending.adjust && !pending.bug && !pending.change, "待审核：通过+调整，无缺陷无变更");
-		const approved = devAuthorActions("已通过");
+	const pending = devAuthorActions("待审核");
+	assert(pending.approve === "pass" && pending.adjust && !pending.bug && !pending.change, "待审核：通过+调整，无缺陷无变更");
+	const settling = devAuthorActions("调整中", true);
+	assert(settling.approve === "settle" && settling.bug && settling.change && !settling.adjust, "对过代码的调整中：定稿+缺陷+需求变更，不能直接完结");
+	const reqAdjusting = devAuthorActions("调整中");
+	assert(reqAdjusting.approve === "pass" && reqAdjusting.adjust && !reqAdjusting.bug && !reqAdjusting.change, "需求阶段调整中：通过+调整");
+	const approved = devAuthorActions("已通过");
 		assert(approved.approve === "pass" && approved.adjust && !approved.bug && !approved.change, "已通过：通过+调整（改需求走调整重新生成文档）");
 		const delivered = devAuthorActions("已交付");
 		assert(delivered.approve === "done" && delivered.bug && delivered.change && !delivered.adjust, "已交付：完结+缺陷+需求变更（调整只在需求阶段）");

@@ -211,6 +211,8 @@ export class ReviewView extends ItemView {
 		for (const [label, n] of counts) {
 			statRow.createSpan({ cls: "nr-chip", text: `${label} ${n}` });
 		}
+		const bugPending = tasks.reduce((n, tk) => n + (tk.bugPending ?? 0), 0);
+		if (bugPending > 0) statRow.createSpan({ cls: "nr-chip nr-chip-bug", text: t("dev.bugPendingChip", { n: bugPending }) });
 
 		this.renderActions(root);
 
@@ -264,6 +266,13 @@ export class ReviewView extends ItemView {
 		if (reviewPath && this.plugin.proposals.has(reviewPath))
 			head.createSpan({ cls: "nr-badge nr-badge-proposal", text: t("badge.proposal") });
 		if (issueCount > 0) head.createSpan({ cls: "nr-badge nr-badge-count", text: `${issueCount}` });
+		if (tk.bugTotal) {
+			head.createSpan({
+				cls: `nr-badge nr-badge-bug${tk.bugPending ? " nr-badge-bug-open" : ""}`,
+				text: t("dev.bugBadge", { n: tk.bugTotal }),
+				title: t("dev.bugBadgeTitle", { total: tk.bugTotal, pending: tk.bugPending ?? 0 }),
+			});
+		}
 		const chev = head.createSpan({ cls: "nr-chevron", text: this.expanded.has(key) ? "▾" : "▸" });
 		chev.addEventListener("click", () => {
 			if (this.expanded.has(key)) this.expanded.delete(key);
@@ -291,6 +300,7 @@ export class ReviewView extends ItemView {
 		} else if (tk.deliverDate) {
 			line(t("dev.deliverDate"), undefined, tk.deliverDate);
 		}
+		if (tk.bugTotal) line(t("dev.bugs"), undefined, t("dev.bugCountLine", { total: tk.bugTotal, pending: tk.bugPending ?? 0 }));
 
 		const target = tk.deliverPath ?? tk.reqPath;
 		if (target) this.renderFileRow(body, target, { omitVerdict: true });
@@ -299,21 +309,29 @@ export class ReviewView extends ItemView {
 	/**
 	 * 开发文档作者按钮。
 	 * 需求阶段：通过 + 调整（按新需求重新生成文档）。
-	 * 对过代码以后：完结 + 缺陷（只记 BUG）+ 需求变更（落地代码）。
+	 * 对过代码的调整中：定稿（确认变更已合入文档，→变更中）+ 缺陷 + 需求变更。
+	 * 其余对过代码以后：完结 + 缺陷 + 需求变更（落地代码）。
 	 * 缺陷/变更走 DevEntryModal：不预填旧意见，避免把上一次的内容带进另一个弹窗。
 	 */
 	private renderDevAuthorButtons(container: HTMLElement, path: string, status: string, delivered: boolean): void {
 		const actions = devAuthorActions(status, delivered);
 		const note = () => this.plugin.store.data.files[path]?.userNote ?? "";
-		const btn = (label: string, active: boolean, onClick: () => void) => {
+		const btn = (label: string, active: boolean, onClick: () => void, title?: string) => {
 			const el = container.createEl("button", { cls: `nr-btn nr-btn-sm ${active ? "nr-btn-active" : ""}`, text: label });
+			if (title) el.title = title;
 			el.addEventListener("click", (e) => {
 				e.stopPropagation();
 				onClick();
 			});
 		};
-		const passOn = actions.approve === "done" ? status.includes("完结") || status.includes("已完成") : status.includes("已通过");
-		btn(actions.approve === "done" ? t("verdict.done") : t("verdict.pass"), passOn, () => void this.plugin.approveRequirement(path));
+		const settleOn = actions.approve === "settle";
+		const passOn = settleOn
+			? false
+			: actions.approve === "done"
+				? status.includes("完结") || status.includes("已完成")
+				: status.includes("已通过");
+		const approveLabel = settleOn ? t("verdict.settle") : actions.approve === "done" ? t("verdict.done") : t("verdict.pass");
+		btn(approveLabel, passOn, () => void this.plugin.approveRequirement(path), settleOn ? t("dev.settleHint") : undefined);
 		if (actions.adjust) {
 			btn(t("verdict.adjust"), status.includes("调整") && !status.includes("变更"), () => {
 				new AdjustModal(this.app, this.plugin, path, note(), "req").open();

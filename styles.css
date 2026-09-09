@@ -36,6 +36,7 @@
 .nr-chip-pass { background: rgba(46, 160, 67, 0.16); color: var(--text-normal); }
 .nr-chip-warn { background: rgba(210, 153, 34, 0.18); color: var(--text-normal); }
 .nr-chip-fail { background: rgba(218, 54, 51, 0.16); color: var(--text-normal); }
+.nr-chip-bug { background: rgba(218, 54, 51, 0.16); color: var(--text-normal); }
 
 .nr-actions {
 	display: flex;
@@ -113,6 +114,9 @@
 .nr-badge-proposal { background: rgba(137, 87, 229, 0.18); color: var(--text-normal); }
 .nr-badge-adj { background: rgba(210, 153, 34, 0.22); color: var(--text-normal); }
 .nr-badge-count { background: rgba(210, 153, 34, 0.2); color: var(--text-normal); }
+/* 缺陷徽章：历史缺陷=中性灰，有未整改=红 */
+.nr-badge-bug { background: var(--background-modifier-hover); color: var(--text-muted); }
+.nr-badge-bug-open { background: rgba(218, 54, 51, 0.2); color: var(--text-normal); }
 .nr-chevron { cursor: pointer; color: var(--text-muted); padding: 0 2px; }
 
 .nr-file-body { padding: 4px 10px 8px 23px; border-top: 1px solid var(--background-modifier-border); }

@@ -70,7 +70,8 @@ class Setting {
 	}
 }
 const normalizePath = (p) => p;
-const obsidianStub = { Notice, TFile, Plugin, ItemView, MarkdownView, Modal, PluginSettingTab, Setting, normalizePath };
+const getLanguage = () => "zh";
+const obsidianStub = { Notice, TFile, Plugin, ItemView, MarkdownView, Modal, PluginSettingTab, Setting, normalizePath, getLanguage };
 
 const origLoad = Module._load;
 Module._load = function (request, parent, isMain) {

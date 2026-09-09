@@ -19,9 +19,9 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | `/dev-review 深度拆解 [modules…] [更新]` | Understand the whole project | Parses **all modules serially, one by one**: finish one (write docs + mark its module card) before the next; rerun after interruption resumes automatically; incremental by default, `更新` forces re-parse |
 | `/dev-review 需求 <task description>` | Before starting | Turns the conversation's requirements into a dev doc (verifiable acceptance checkboxes, non-goals), status = 待审核 |
 | `/dev-review 调整` | Doc in 调整中 | Regenerates the doc from new requirements (doc only); requirement stage → 待审核, post-code → 变更中 |
-| `/dev-review 开工` | After you "Approve" | Implements approved docs (status 已通过 → 开发中) |
-| `/dev-review 交付 <task>` | Work finished | Fills the "交付" section of the same doc against acceptance, status = 已交付 |
-| `/dev-review 整改` (alias `添加BUG`) | After you log a bug | Fixes entries already written in the doc's 缺陷记录 section; never creates new docs |
+| `/dev-review 开工` | After you "Approve" | Implements approved docs (status 已通过 → 开发中); reads the module card's 缺陷史 first to avoid regressions |
+| `/dev-review 交付 <task>` | Work finished | Fills the "交付" section of the same doc against acceptance, status = 已交付; self-test includes a regression check against 缺陷史 |
+| `/dev-review 整改` (alias `添加BUG`) | After you log a bug | Fixes entries already written in the doc's 缺陷记录 section; never creates new docs; fills 整改 + 根因 and appends to the module card's 缺陷史 |
 | `/dev-review 变更` | Doc in 变更中 | Doc already settled: land the change in code per the doc, fill 落实 |
 | `/dev-review 继续` | A delivery got adjusted | Addresses adjustment notes (code + delivery section), re-delivers for review |
 | `/dev-review 状态` | Anytime | Lists every doc grouped by module: where it's stuck and whose move is next |
@@ -32,7 +32,7 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | Location | Contents | Notes |
 |---|---|---|
 | `docs/开发文档/<module>/` | Dev docs (requirement + delivery in one) | The review targets; status field tracked by the plugin |
-| `docs/开发文档/<module>/_模块.md` | Module card (structure index) | Layers / pages / responsibility / parse progress; not a task, cannot be started |
+| `docs/开发文档/<module>/_模块.md` | Module card (structure index) | Layers / pages / responsibility / parse progress / 缺陷史 (root-cause index of fixed bugs; read before 开工/变更/交付); not a task, cannot be started |
 | `.ai-review/adjustments/` | Notes written from the panel's "Adjust" | Read first by the skill, auto-removed once handled |
 
 ## The loop
@@ -41,7 +41,7 @@ Show the following manual to the user (keep the Markdown formatting and content;
 (optional) 深度拆解 / 解析业务 → understand the current behavior
 /dev-review 需求 → review in Obsidian Dev mode: "Adjust" regenerates the doc / "Approve" releases it
 → /dev-review 开工 → /dev-review 交付 → you "Finish"
-→ post-code requirement change: log "Change req" → 调整中 → /dev-review 调整 settles the doc → 变更中 → /dev-review 变更 lands the code
+→ post-code requirement change: log "Change req" → 调整中 → /dev-review 调整 settles the doc → 变更中 → /dev-review 变更 lands the code (if the AI forgets to flip the status, use the panel's "Finalize" button)
 → bug: "Bug" → /dev-review 整改
 ```
 

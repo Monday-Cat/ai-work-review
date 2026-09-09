@@ -23,6 +23,9 @@ export interface DevTask {
 	unified?: boolean;
 	/** 「需求变更」节还有未落实的条目：文档已进入代码期（调整中→变更中 流转） */
 	pendingChange?: boolean;
+	/** 「缺陷记录」条目数（统一文档）：total=历史总数，pending=未整改。已修复条目是模块回归清单的来源 */
+	bugTotal?: number;
+	bugPending?: number;
 }
 
 export type TaskKind = "final" | "wait" | "ready" | "active" | "none";
@@ -73,6 +76,7 @@ export function collectDevTasks(docs: DevFileRef[], reqs: DevFileRef[], dels: De
 	for (const d of docs) {
 		const slug = stripDatePrefix(d.path.split("/").pop() ?? d.path);
 		if (!slug || isTemplateLike(d.path)) continue;
+		const bugs = countBugEntries(d.content);
 		map.set(slug, {
 			slug,
 			unified: true,
@@ -83,6 +87,8 @@ export function collectDevTasks(docs: DevFileRef[], reqs: DevFileRef[], dels: De
 			codeTarget: extractFieldValue(d.content, "目标目录"),
 			targetFolder: targetFolderOf(d.path, docFolder),
 			pendingChange: hasPendingChange(d.content),
+			bugTotal: bugs.total,
+			bugPending: bugs.pending,
 		});
 	}
 	for (const t of matchTasks(reqs, dels)) {
@@ -198,6 +204,19 @@ export function hasPendingChange(content: string): boolean {
 	return blocks.some((b) => !/\*\*落实\*\*[:：]\s*\S/.test(b));
 }
 
+/** 「缺陷记录」条目统计：total=条目总数，pending=「整改」未填的条目数 */
+export function countBugEntries(content: string): { total: number; pending: number } {
+	const idx = content.indexOf(BUG_HEADING);
+	if (idx < 0) return { total: 0, pending: 0 };
+	let tail = content.slice(idx + BUG_HEADING.length);
+	const next = tail.indexOf("\n## ");
+	if (next >= 0) tail = tail.slice(0, next);
+	const blocks = tail.split(/^###\s/m).slice(1);
+	if (blocks.length === 0) return { total: 0, pending: 0 };
+	const pending = blocks.filter((b) => !/\*\*整改\*\*[:：]\s*\S/.test(b)).length;
+	return { total: blocks.length, pending };
+}
+
 export function todayStamp(d = new Date()): string {
 	const y = d.getFullYear();
 	const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -260,7 +279,7 @@ export function canRecordBug(status: string | undefined, delivered = false): boo
 }
 
 export interface DevAuthorActions {
-	approve: "pass" | "done";
+	approve: "pass" | "settle" | "done";
 	adjust: boolean;
 	change: boolean;
 	bug: boolean;
@@ -269,13 +288,15 @@ export interface DevAuthorActions {
 /**
  * 面板作者按钮。
  * 需求阶段（待审核/调整/已通过）：通过 + 调整（按新需求重新生成文档，不改代码）。
- * 对过代码以后（开发中/已交付/完结/整改中/变更中）：完结 + 缺陷（只记 BUG）+ 需求变更（改代码落地）。
+ * 对过代码的调整中：定稿（确认变更已合入文档，进入变更中）+ 缺陷 + 需求变更；不能直接完结，跳过代码落地。
+ * 其余对过代码以后（开发中/已交付/完结/整改中/变更中）：完结 + 缺陷（只记 BUG）+ 需求变更（改代码落地）。
  * 三者互不混用：文档的事走调整，已过代码的需求落地走变更，BUG 走缺陷。
  */
 export function devAuthorActions(status: string | undefined, delivered = false): DevAuthorActions {
 	const closeOut = delivered || isCloseOutStatus(status);
+	const settle = delivered && isAdjustReqStatus(status);
 	return {
-		approve: closeOut ? "done" : "pass",
+		approve: settle ? "settle" : closeOut ? "done" : "pass",
 		adjust: !closeOut,
 		change: closeOut,
 		bug: closeOut,
@@ -287,9 +308,10 @@ export function isApprovedReqStatus(status: string | undefined): boolean {
 	return s.includes("已通过") && !s.includes("待") && !s.includes("完结");
 }
 
-/** 待审核点通过=已通过（可开工）；开发中/已交付/整改中点通过=完结。交付后即使状态被改成「调整」也仍完结。 */
+/** 待审核点通过=已通过（可开工）；对过代码的调整中点定稿=变更中（等落地，不直接完结）；开发中/已交付/整改中点通过=完结。 */
 export function nextApproveStatus(current: string | undefined, delivered = false): string {
 	const s = (current ?? "").trim();
+	if (isAdjustReqStatus(s) && delivered) return "变更中";
 	if (delivered || isCloseOutStatus(s)) return "完结";
 	return "已通过";
 }

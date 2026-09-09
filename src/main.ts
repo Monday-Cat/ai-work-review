@@ -419,7 +419,9 @@ export default class AiWorkReviewPlugin extends Plugin {
 			await this.setMarkdownStatus(path, next);
 		}
 		await this.saveAll();
-		new Notice(t(next === "完结" ? "notice.reqClosed" : "notice.reqApproved", { path }));
+		new Notice(
+			t(next === "完结" ? "notice.reqClosed" : next === "变更中" ? "notice.changeFinalized" : "notice.reqApproved", { path }),
+		);
 		this.refreshView();
 	}
 

@@ -19,7 +19,7 @@ Vibe-editing a knowledge vault fails in a predictable way: small inconsistencies
 The panel header has a mode switch (persisted per vault):
 
 - **Novel mode** — per-file review: every markdown file in scope gets a verdict, grouped by folder. Best for reviewing knowledge/setting files one by one.
-- **Dev mode** — task-pipeline review. Each change lives in one **开发文档** under `docs/开发文档/<module>/`. The author can **Adjust** or **Approve**; templates live in the agent skill, not the vault. Legacy `开发需求/` + `开发交付/` pairs still show until migrated.
+- **Dev mode** — task-pipeline review. Each change lives in one **开发文档** under `docs/开发文档/<module>/`. The author can **Adjust** or **Approve**; templates live in the agent skill, not the vault. Fixed bugs are distilled into the module card's **缺陷史** (symptom → root cause), which the AI reads before start/change/deliver as a regression checklist. Legacy `开发需求/` + `开发交付/` pairs still show until migrated.
 
 Pair Dev mode with a small agent skill (see the `skills/` folder in this repo) so the AI writes requirement docs & delivery notes there and consumes your adjustments — a full "AI works → you approve in Obsidian → AI continues" loop.
 
@@ -128,7 +128,7 @@ Source layout: `rules` (pure checker functions) · `store` (verdict state) · `i
 
 # 中文说明
 
-**AI 工作审核**：在 Obsidian 里审核并批准 AI 对你笔记库的修改。面板顶部可在两种模式间切换（按 vault 记忆）：**小说模式**逐文件审核设定档案；**开发模式**扫描 `docs/开发文档/<模块>/` 下的统一开发文档，文档上可点 **调整** 或 **通过**。代码项目的模板写在技能里，不往仓库落模板文件；未合并的旧 `开发需求/` / `开发交付/` 仍可配对显示。
+**AI 工作审核**：在 Obsidian 里审核并批准 AI 对你笔记库的修改。面板顶部可在两种模式间切换（按 vault 记忆）：**小说模式**逐文件审核设定档案；**开发模式**扫描 `docs/开发文档/<模块>/` 下的统一开发文档，需求阶段可点 **通过** / **调整**，对过代码以后可点 **完结** / **缺陷** / **需求变更**，变更合入文档后用 **定稿** 确认进入 `变更中`（该状态不能直接完结，避免跳过代码落地）。已修复的缺陷由 AI 汇入模块卡 **缺陷史**（症状 → 根因），开工 / 变更 / 交付前先读它做回归检查，防止旧缺陷复发；任务行与面板顶部会显示缺陷计数。代码项目的模板写在技能里，不往仓库落模板文件；未合并的旧 `开发需求/` / `开发交付/` 仍可配对显示。
 
 规则检查（模板完整性、草案标记、引用完整性、索引一致性、状态字段）在本地即时完成；AI 深度审核由终端里的智能体完成并把结构化报告写入 vault 根下的 `.ai-review/` 桥接目录（对 Obsidian 检索隐藏）；修改稿必须经 diff 对照、你点击「应用替换」后才会写入原文件。你还可以在面板里对文件点「调整」写明不足点，意见同步给 AI 生成针对性修改稿——文件只有在你人工标记「通过」后才算定稿。
 
