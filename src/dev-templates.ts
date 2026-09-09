@@ -59,4 +59,5 @@ export const MODULE_CARD_TEMPLATE = `# 模块：<name>
 - **职责**：
 - **业务拆解**：未拆解
 - **缺陷史**：无
+- **业务整合**：未整合
 `;

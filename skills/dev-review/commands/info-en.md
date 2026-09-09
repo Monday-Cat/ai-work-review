@@ -28,8 +28,9 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | `/dev-review 交付 <task>` | Work finished | Fills the "交付" section of the same doc against acceptance, status = 已交付; self-test includes a regression check against 缺陷史 |
 | `/dev-review 整改` (alias `添加BUG`) | After you log a bug | Fixes entries already written in the doc's 缺陷记录 section; never creates new docs; fills 整改 + 根因 and appends to the module card's 缺陷史 |
 | `/dev-review 变更` | Doc in 变更中 | Doc already settled: land the change in code per the doc, fill 落实 |
+| `/dev-review 整合 [module]` | After closed tasks pile up | Merges closed-task deltas back into the business docs in place; tasks stamped 已整合, module card gets a 业务整合 timestamp; contradictions listed for confirmation |
 | `/dev-review 继续` | A delivery got adjusted | Addresses adjustment notes (code + delivery section), re-delivers for review |
-| `/dev-review 状态` | Anytime | Lists every doc grouped by module: where it's stuck and whose move is next |
+| `/dev-review 状态` | Anytime | Lists every doc grouped by module: where it's stuck, whose move is next, and each module's un-integrated backlog |
 | `/dev-review:info-cn` / `:info-en` | — | Show this manual (Chinese / English) |
 
 ## Where files go
