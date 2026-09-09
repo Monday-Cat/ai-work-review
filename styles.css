@@ -86,7 +86,8 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: 4px;
-	flex: 1 0 auto;
+	/* 不与任务名抢剩余空间（0 0 之前是 1 0 会平分，导致 完结↔⋯ 之间空一大截）；徽章与 ⋯ 紧凑靠右 */
+	flex: 0 1 auto;
 	justify-content: flex-end;
 }
 .nr-dot {
