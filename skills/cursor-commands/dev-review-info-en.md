@@ -18,6 +18,7 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | `/dev-review 解析业务 <module> [流程]` | Understand one module | Turns the module's current behavior into per-business-line docs (snapshot, status = 完结; with `流程` they stay 待审核 and enter the review-start loop) |
 | `/dev-review 深度拆解 [modules…] [更新]` | Understand the whole project | Parses **all modules serially, one by one**: finish one (write docs + mark its module card) before the next; rerun after interruption resumes automatically; incremental by default, `更新` forces re-parse |
 | `/dev-review 需求 <task description>` | Before starting | Turns the conversation's requirements into a dev doc (verifiable acceptance checkboxes, non-goals), status = 待审核 |
+| `/dev-review 建卡 <concept>` | Distill a shared concept | Creates the concept card `docs/公用配置/<concept>.md`: definition from the chat or extracted from code/docs (AI drafts, author confirms); unifies variant terms in docs into the canonical name with wikilinks; suggests a terminology-unification requirement for code renames |
 | `/dev-review 调整` | Doc in 调整中 | Regenerates the doc from new requirements (doc only); requirement stage → 待审核, post-code → 变更中 |
 | `/dev-review 开工` | After you "Approve" | Implements approved docs (status 已通过 → 开发中); reads the module card's 缺陷史 first to avoid regressions |
 | `/dev-review 交付 <task>` | Work finished | Fills the "交付" section of the same doc against acceptance, status = 已交付; self-test includes a regression check against 缺陷史 |

@@ -1,6 +1,6 @@
 {
 	"name": "ai-work-review",
-	"version": "0.7.5",
+	"version": "0.7.6",
 	"description": "Review and approve AI's work on your markdown vault: rule checks, AI report ingestion, proposal diff with confirmed replacement.",
 	"main": "main.js",
 	"scripts": {
