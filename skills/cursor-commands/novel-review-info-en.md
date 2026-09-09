@@ -2,6 +2,8 @@
 description: View the /novel-review workflow manual (English)
 ---
 
+View the novel-review workflow manual (English): subcommands, report schema, loading discipline.
+
 Show the following manual to the user (keep the Markdown formatting and content; do not perform any review or modification):
 
 ---

@@ -2,6 +2,8 @@
 description: View the /dev-review workflow manual (English)
 ---
 
+View the /dev-review workflow manual (English): commands, file locations, the loop, core rules.
+
 Show the following manual to the user (keep the Markdown formatting and content; do not perform any development or modification):
 
 ---
