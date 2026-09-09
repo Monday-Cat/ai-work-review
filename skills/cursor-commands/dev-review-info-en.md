@@ -21,6 +21,10 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | `/dev-review 深度拆解 [modules…] [更新]` | Understand the whole project | Parses **all modules serially, one by one**: finish one (write docs + mark its module card) before the next; rerun after interruption resumes automatically; incremental by default, `更新` forces re-parse |
 | `/dev-review 需求 <task description>` | Before starting | Turns the conversation's requirements into a dev doc (verifiable acceptance checkboxes, non-goals), status = 待审核 |
 | `/dev-review 建卡 <concept>` | Distill a shared concept | Creates the concept card `docs/公用配置/<concept>.md`: definition from the chat or extracted from code/docs (AI drafts, author confirms); unifies variant terms in docs into the canonical name with wikilinks; suggests a terminology-unification requirement for code renames |
+| `/dev-review 接口摄取 <source> [service]` | Got API material | Normalizes it into the per-service summary `docs/接口文档/<service>/_接口.md` + raw snapshot; missing fields marked 原文未提供 |
+| `/dev-review 接口变动 <service>` | Provider APIs updated | Re-fetch → field-level change list → update doc & index; optionally generates an adaptation requirement after asking (待审核) |
+| `/dev-review 接口比对 <service> [module]` | Suspect drift | Compares the API doc against code call sites and dev docs; reports three mismatch classes |
+| `/dev-review 接口列表` | Anytime | Refreshes and shows the per-service index (snapshot date, endpoint count, source) |
 | `/dev-review 调整` | Doc in 调整中 | Regenerates the doc from new requirements (doc only); requirement stage → 待审核, post-code → 变更中 |
 | `/dev-review 开工` | After you "Approve" | Implements approved docs (status 已通过 → 开发中); reads the module card's 缺陷史 first to avoid regressions |
 | `/dev-review 交付 <task>` | Work finished | Fills the "交付" section of the same doc against acceptance, status = 已交付; self-test includes a regression check against 缺陷史 |
@@ -37,6 +41,7 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | `docs/开发文档/<module>/` | Dev docs (requirement + delivery in one) | The review targets; status field tracked by the plugin |
 | `docs/开发文档/<module>/_模块.md` | Module card (structure index) | Layers / pages / responsibility / parse progress / 缺陷史 (root-cause index of fixed bugs; read before 开工/变更/交付); not a task, cannot be started |
 | `docs/公用配置/<concept>.md` | Concept cards (shared concepts) | Targets of `[[concept]]` wikilinks; the card is authoritative — the AI never guesses a concept; the AI may draft a card but only the author confirms and saves it |
+| `docs/接口文档/<service>/_接口.md` | API doc summary | Normalized mirror of external APIs; body maintained only by 接口摄取/接口变动; `_索引.md` for overview |
 | `.ai-review/adjustments/` | Notes written from the panel's "Adjust" | Read first by the skill, auto-removed once handled |
 
 ## The loop
