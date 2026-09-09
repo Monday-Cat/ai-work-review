@@ -28,6 +28,8 @@ const GROUP_ORDER = ["__root__", "世界观", "人物库", "大道库", "事件�
 export class ReviewView extends ItemView {
 	plugin: AiWorkReviewPlugin;
 	private expanded = new Set<string>();
+	/** 任务行操作按钮（通过/缺陷/需求变更…）展开状态：默认收进「⋯」，处理该任务时才展开 */
+	private devActionsOpen = new Set<string>();
 	private onlyIssues = false;
 	private currentPath: string | null = null;
 	private renderSeq = 0;
@@ -230,7 +232,9 @@ export class ReviewView extends ItemView {
 			groups.set(g, arr);
 		}
 		for (const [g, items] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-Hans-CN"))) {
-			list.createDiv({ cls: "nr-group-title", text: `${g}（${items.length}）` });
+			// 组标题只显示模块名（路径末段），完整路径放悬停提示
+			const leaf = g.split("/").pop() || g;
+			list.createDiv({ cls: "nr-group-title", text: `${leaf}（${items.length}）`, title: g });
 			for (const tk of items) this.renderTaskRow(list, tk);
 		}
 	}
@@ -259,18 +263,37 @@ export class ReviewView extends ItemView {
 		if (reviewPath) name.addEventListener("click", () => void this.plugin.openAt(reviewPath));
 		if (st.label) head.createSpan({ cls: "nr-badge", text: st.label });
 		if (tk.reqPath) {
+			// 操作按钮默认收进「⋯」：行首空间留给任务/模块名，处理该任务时才展开功能区
 			const actionsEl = head.createDiv({ cls: "nr-file-actions" });
-			// 「需求变更」有未落实条目 = 已对过代码（调整中→变更中 流转），按代码期给按钮
-			this.renderDevAuthorButtons(actionsEl, tk.reqPath, tk.reqStatus ?? "", !!tk.deliverDate || !!tk.pendingChange);
+			if (this.devActionsOpen.has(key)) {
+				// 「需求变更」有未落实条目 = 已对过代码（调整中→变更中 流转），按代码期给按钮
+				this.renderDevAuthorButtons(actionsEl, tk.reqPath, tk.reqStatus ?? "", !!tk.deliverDate || !!tk.pendingChange);
+				actionsEl
+					.createEl("button", { cls: "nr-btn nr-btn-sm", text: "▸", title: t("dev.actionsCollapse") })
+					.addEventListener("click", (e) => {
+						e.stopPropagation();
+						this.devActionsOpen.delete(key);
+						void this.render();
+					});
+			} else {
+				actionsEl
+					.createEl("button", { cls: "nr-btn nr-btn-sm", text: "⋯", title: t("dev.actionsOpen") })
+					.addEventListener("click", (e) => {
+						e.stopPropagation();
+						this.devActionsOpen.add(key);
+						void this.render();
+					});
+			}
 		}
 		if (reviewPath && this.plugin.proposals.has(reviewPath))
 			head.createSpan({ cls: "nr-badge nr-badge-proposal", text: t("badge.proposal") });
 		if (issueCount > 0) head.createSpan({ cls: "nr-badge nr-badge-count", text: `${issueCount}` });
-		if (tk.bugTotal) {
+		// 缺陷徽章只在有未整改时显示（红色）；全部修复后收进展开区统计，行首不再挂账
+		if (tk.bugPending) {
 			head.createSpan({
-				cls: `nr-badge nr-badge-bug${tk.bugPending ? " nr-badge-bug-open" : ""}`,
-				text: t("dev.bugBadge", { n: tk.bugTotal }),
-				title: t("dev.bugBadgeTitle", { total: tk.bugTotal, pending: tk.bugPending ?? 0 }),
+				cls: "nr-badge nr-badge-bug-open",
+				text: t("dev.bugBadge", { n: tk.bugPending }),
+				title: t("dev.bugBadgeTitle", { total: tk.bugTotal ?? 0, pending: tk.bugPending }),
 			});
 		}
 		const chev = head.createSpan({ cls: "nr-chevron", text: this.expanded.has(key) ? "▾" : "▸" });

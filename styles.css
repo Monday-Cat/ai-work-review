@@ -114,8 +114,7 @@
 .nr-badge-proposal { background: rgba(137, 87, 229, 0.18); color: var(--text-normal); }
 .nr-badge-adj { background: rgba(210, 153, 34, 0.22); color: var(--text-normal); }
 .nr-badge-count { background: rgba(210, 153, 34, 0.2); color: var(--text-normal); }
-/* 缺陷徽章：历史缺陷=中性灰，有未整改=红 */
-.nr-badge-bug { background: var(--background-modifier-hover); color: var(--text-muted); }
+/* 缺陷徽章：只在有未整改缺陷时显示（红）；全部修复后收进展开区统计 */
 .nr-badge-bug-open { background: rgba(218, 54, 51, 0.2); color: var(--text-normal); }
 .nr-chevron { cursor: pointer; color: var(--text-muted); padding: 0 2px; }
 
