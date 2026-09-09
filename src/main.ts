@@ -659,6 +659,24 @@ export default class AiWorkReviewPlugin extends Plugin {
 		new Notice(t("notice.reqAdjustCopied", { n: adjs.length + bugs.length + changes.length }));
 	}
 
+	/** 复制单份「变更中」文档的落地指令（面板「落地」按钮）：等价于 /dev-review 变更 只处理该文档 */
+	async copyChangeLandPrompt(path: string): Promise<void> {
+		const all = await this.listRequirementFiles();
+		const r = all.find((x) => x.path === path);
+		if (!r || !(r.status ?? "").includes("变更中")) {
+			new Notice(t("notice.changeLandNone", { path }));
+			return;
+		}
+		const prompt = [
+			t("prompt.reqChangeIntro"),
+			`- \`${r.path}\`（${t("dev.targetFolder")}：${r.target || "—"}）`,
+			"",
+			t("prompt.contextHintLabel") + "：" + this.settings.aiContextHint,
+		].join("\n");
+		await navigator.clipboard.writeText(prompt);
+		new Notice(t("notice.changeLandCopied", { path }));
+	}
+
 	async copyReqStartPrompt(): Promise<void> {
 		const todo = (await this.listRequirementFiles()).filter((r) => {
 			const s = r.status ?? "";

@@ -333,7 +333,8 @@ export class ReviewView extends ItemView {
 	 * 开发文档作者按钮。
 	 * 需求阶段：通过 + 调整（按新需求重新生成文档）。
 	 * 对过代码的调整中：定稿（确认变更已合入文档，→变更中）+ 缺陷 + 需求变更。
-	 * 其余对过代码以后：完结 + 缺陷 + 需求变更（落地代码）。
+	 * 变更中：落地（复制 /dev-review 变更 指令，不给完结，防跳过落地）+ 缺陷 + 需求变更。
+	 * 其余对过代码以后（开发中/已交付/完结/整改中）：完结 + 缺陷 + 需求变更。
 	 * 缺陷/变更走 DevEntryModal：不预填旧意见，避免把上一次的内容带进另一个弹窗。
 	 */
 	private renderDevAuthorButtons(container: HTMLElement, path: string, status: string, delivered: boolean): void {
@@ -348,13 +349,19 @@ export class ReviewView extends ItemView {
 			});
 		};
 		const settleOn = actions.approve === "settle";
-		const passOn = settleOn
-			? false
-			: actions.approve === "done"
-				? status.includes("完结") || status.includes("已完成")
-				: status.includes("已通过");
-		const approveLabel = settleOn ? t("verdict.settle") : actions.approve === "done" ? t("verdict.done") : t("verdict.pass");
-		btn(approveLabel, passOn, () => void this.plugin.approveRequirement(path), settleOn ? t("dev.settleHint") : undefined);
+		const landOn = !settleOn && status.includes("变更中");
+		if (landOn) {
+			// 变更中：下一步是 AI 落地代码，不给「完结」（防跳过落地）——「落地」复制该文档的变更指令
+			btn(t("verdict.land"), false, () => void this.plugin.copyChangeLandPrompt(path), t("dev.landHint"));
+		} else {
+			const passOn = settleOn
+				? false
+				: actions.approve === "done"
+					? status.includes("完结") || status.includes("已完成")
+					: status.includes("已通过");
+			const approveLabel = settleOn ? t("verdict.settle") : actions.approve === "done" ? t("verdict.done") : t("verdict.pass");
+			btn(approveLabel, passOn, () => void this.plugin.approveRequirement(path), settleOn ? t("dev.settleHint") : undefined);
+		}
 		if (actions.adjust) {
 			btn(t("verdict.adjust"), status.includes("调整") && !status.includes("变更"), () => {
 				new AdjustModal(this.app, this.plugin, path, note(), "req").open();
