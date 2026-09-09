@@ -33,6 +33,7 @@ Show the following manual to the user (keep the Markdown formatting and content;
 |---|---|---|
 | `docs/开发文档/<module>/` | Dev docs (requirement + delivery in one) | The review targets; status field tracked by the plugin |
 | `docs/开发文档/<module>/_模块.md` | Module card (structure index) | Layers / pages / responsibility / parse progress / 缺陷史 (root-cause index of fixed bugs; read before 开工/变更/交付); not a task, cannot be started |
+| `docs/公用配置/<concept>.md` | Concept cards (shared concepts) | Targets of `[[concept]]` wikilinks; the card is authoritative — the AI never guesses a concept; the AI may draft a card but only the author confirms and saves it |
 | `.ai-review/adjustments/` | Notes written from the panel's "Adjust" | Read first by the skill, auto-removed once handled |
 
 ## The loop
@@ -50,6 +51,7 @@ Show the following manual to the user (keep the Markdown formatting and content;
 1. Be honest in every doc: failing tests are reported as failing — you make approval decisions based on them.
 2. The state machine gates work: only 已通过 can start; business snapshots stay 完结 so they can never be started by accident.
 3. Parsed business docs must map back to code: pages & entries, main flow, business rules, branches & errors, data & dependencies; mark assumptions instead of inventing details.
+4. Shared concepts are authoritative in `docs/公用配置/` concept cards: reference them via wikilinks; on a dead link or an undefined concept the AI stops and asks the author instead of guessing.
 
 ## Scope
 
