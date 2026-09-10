@@ -19,8 +19,8 @@ Show the following manual to the user (keep the Markdown formatting and content;
 | `/dev-review 解析模块` | Onboarding | Scans every feature dir under `lib/features/`, creates `docs/开发文档/<module>/` and a module card `_模块.md` (structure index) |
 | `/dev-review 解析业务 <module> [流程]` | Understand one module | Turns the module's current behavior into per-business-line docs (snapshot, status = 完结; with `流程` they stay 待审核 and enter the review-start loop) |
 | `/dev-review 深度拆解 [modules…] [更新]` | Understand the whole project | Parses **all modules serially, one by one**: finish one (write docs + mark its module card) before the next; rerun after interruption resumes automatically; incremental by default, `更新` forces re-parse |
-| `/dev-review 组件解析 [module]` | Building the registry | Scans widgets into component cards + `_索引.md`; look-alike components produce a 组件抽取 requirement (待审核), never an in-place refactor |
-| `/dev-review 组件查 <need description>` | Before writing UI | Recommends which component to reuse with minimal usage; says plainly when nothing fits |
+| `/dev-review 组件解析 [module]` | Building the registry | Scans widgets into component cards (dual-dimension tags from the `_标签.md` vocabulary) + a capability-grouped `_索引.md`; look-alikes produce a 组件抽取 requirement (待审核) |
+| `/dev-review 组件查 <need description>` | Before writing UI | Tag-first lookup: capability/scenario keywords → tag hits → recommendation with minimal usage; says plainly when nothing fits |
 | `/dev-review 组件登记 <path>` | New component delivered | Cards & indexes the reusable component |
 | `/dev-review 需求 <task description>` | Before starting | Turns the conversation's requirements into a dev doc (verifiable acceptance checkboxes, non-goals), status = 待审核 |
 | `/dev-review 建卡 <concept>` | Distill a shared concept | Creates the concept card `docs/公用配置/<concept>.md`: definition from the chat or extracted from code/docs (AI drafts, author confirms); unifies variant terms in docs into the canonical name with wikilinks; suggests a terminology-unification requirement for code renames |

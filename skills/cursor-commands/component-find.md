@@ -2,7 +2,7 @@
 description: 组件查 · Component find — recommend which existing component to reuse (<need description>)
 ---
 
-**Selection**: given a need description, search `docs/组件文档/` and the code, recommend which component to reuse with a minimal usage example；say plainly when nothing fits and ask the author about creating one (register new reusable components with `组件登记` at delivery). Run this before writing UI — don't reinvent wheels.
+**Selection, tag-first**: extract capability/scenario keywords from the need → narrow candidates by `#能力/…` `#场景/…` tags → decide via responsibility & example → recommend with minimal usage；say plainly when nothing fits and ask about creating one (register with `组件登记` at delivery). Run this before writing UI；you can also global-search the tags in Obsidian.
 
 先加载并遵守技能 dev-review 的 SKILL.md：优先项目级 `.cursor/skills/dev-review/SKILL.md`（ZCode 为 `.zcode/skills/`），没有则读用户级 `~/.cursor/skills/dev-review/SKILL.md`（ZCode 为 `~/.zcode/skills/`）。
 
