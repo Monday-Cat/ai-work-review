@@ -2,7 +2,7 @@
 description: 组件登记 · Component register — card & index a reusable component (<path>)
 ---
 
-Registers the given component file into the registry：write its card at `docs/组件文档/<分类>/<组件名>.md` (path / dual-dimension tags / responsibility / props API / minimal example / consumers)，**tags must come from the `_标签.md` controlled vocabulary, propose missing ones**, and refresh the capability-grouped `_索引.md`. Use it when a new reusable component is delivered, so future development can find it via `组件查`.
+Registers the given component file into the registry：write its card at `docs/组件文档/<分类>/<组件名>.md` (path / dual-dimension tags / responsibility / **layout ASCII sketch** / props API / minimal example / consumers；redraw the layout after the component changes)，**tags must come from the `_标签.md` controlled vocabulary, propose missing ones**, and refresh the capability-grouped `_索引.md`. Use it when a new reusable component is delivered, so future development can find it via `组件查`.
 
 先加载并遵守技能 dev-review 的 SKILL.md：优先项目级 `.cursor/skills/dev-review/SKILL.md`（ZCode 为 `.zcode/skills/`），没有则读用户级 `~/.cursor/skills/dev-review/SKILL.md`（ZCode 为 `~/.zcode/skills/`）。
 
