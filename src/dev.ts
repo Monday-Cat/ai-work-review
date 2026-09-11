@@ -41,8 +41,9 @@ function escapeRe(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/** 取「- **字段**：值」的值。行内匹配：字段留空返回 ""，不会跨行吞掉下一行内容 */
 export function extractFieldValue(content: string, field: string): string | undefined {
-	const re = new RegExp(`^\\s*[-*]\\s*\\*\\*${escapeRe(field)}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "m");
+	const re = new RegExp(`^[ \\t]*[-*][ \\t]*\\*\\*${escapeRe(field)}\\*\\*[ \\t]*[:：][ \\t]*([^\\r\\n]*?)[ \\t]*$`, "m");
 	const m = content.match(re);
 	return m ? m[1].replace(/[*_`]/g, "").trim() : undefined;
 }
@@ -143,8 +144,9 @@ export function targetFolderOf(path: string, folderSetting: string): string {
 	return parts.slice(0, -1).join("/");
 }
 
+/** 把「- **字段**：旧值」改写为新值。行内匹配：字段留空时只替换本行，不会吞掉下一行 */
 export function setFieldValue(content: string, field: string, value: string): string {
-	const re = new RegExp(`^(\\s*[-*]\\s*\\*\\*${escapeRe(field)}\\*\\*\\s*[:：]\\s*).*$`, "m");
+	const re = new RegExp(`^([ \\t]*[-*][ \\t]*\\*\\*${escapeRe(field)}\\*\\*[ \\t]*[:：][ \\t]*)[^\\r\\n]*$`, "m");
 	if (re.test(content)) return content.replace(re, `$1${value}`);
 	return content;
 }
@@ -200,8 +202,8 @@ export function hasPendingChange(content: string): boolean {
 	const next = tail.indexOf("\n## ");
 	if (next >= 0) tail = tail.slice(0, next);
 	const blocks = tail.split(/^###\s/m).slice(1);
-	if (blocks.length === 0) return /^[-*]\s+\S/m.test(tail); // 手写变更，未分条目
-	return blocks.some((b) => !/\*\*落实\*\*[:：]\s*\S/.test(b));
+	if (blocks.length === 0) return /^[-*][ \t]+\S/m.test(tail); // 手写变更，未分条目
+	return blocks.some((b) => !/\*\*落实\*\*[:：][ \t]*\S/.test(b));
 }
 
 /** 「缺陷记录」条目统计：total=条目总数，pending=「整改」未填的条目数 */
@@ -213,7 +215,7 @@ export function countBugEntries(content: string): { total: number; pending: numb
 	if (next >= 0) tail = tail.slice(0, next);
 	const blocks = tail.split(/^###\s/m).slice(1);
 	if (blocks.length === 0) return { total: 0, pending: 0 };
-	const pending = blocks.filter((b) => !/\*\*整改\*\*[:：]\s*\S/.test(b)).length;
+	const pending = blocks.filter((b) => !/\*\*整改\*\*[:：][ \t]*\S/.test(b)).length;
 	return { total: blocks.length, pending };
 }
 

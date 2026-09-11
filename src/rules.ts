@@ -411,7 +411,7 @@ function checkStatusFields(path: string, content: string, checks: StatusCheck[])
 	for (const check of checks) {
 		if (!matchingFolderPrefix(path, [check.folder])) continue;
 		const fieldEsc = check.field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-		const re = new RegExp(`^\\s*[-*]\\s*\\*\\*${fieldEsc}\\*\\*\\s*[:：]\\s*(.+?)\\s*$`, "m");
+		const re = new RegExp(`^[ \\t]*[-*][ \\t]*\\*\\*${fieldEsc}\\*\\*[ \\t]*[:：][ \\t]*([^\\r\\n]*?)[ \\t]*$`, "m");
 		const m = content.match(re);
 		if (!m) continue;
 		const value = stripMd(m[1]);

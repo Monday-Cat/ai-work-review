@@ -9,8 +9,8 @@ skills/
 │   └── commands/
 │       ├── info-cn.md       ZCode 冒号命令 /novel-review:info-cn（中文说明书）
 │       └── info-en.md       /novel-review:info-en（English manual）
-├── dev-review/              开发文档工作流（解析模块 / 解析业务 / 深度拆解 → 需求 → 开工 → 交付 → 整改 / 变更）
-│   ├── SKILL.md             ZCode 技能（/dev-review 解析模块|解析业务|深度拆解|需求|交付|整改|变更|调整|开工|继续|状态）
+├── dev-review/              开发文档工作流（解析模块 / 解析业务 / 深度拆解 → 需求 / 微改 → 添加 → 开工 → 交付 → 整改 / 变更）
+│   ├── SKILL.md             ZCode 技能（/dev-review 解析模块|解析业务|深度拆解|需求|微改|添加|交付|整改|变更|调整|开工|继续|状态）
 │   └── commands/
 │       ├── info-cn.md       /dev-review:info-cn（中文说明书）
 │       └── info-en.md       /dev-review:info-en（English manual）
@@ -25,8 +25,13 @@ skills/
     ├── dev-review-info-en.md    /dev-review-info-en
     └── 子命令直达入口（中英双语，等价于 /dev-review <同名子命令>）：
         深度拆解=deep-parse · 解析模块=parse-modules · 解析业务=parse-biz ·
-        需求=requirement · 交付=deliver · 整改=fix-bug · 添加BUG=add-bug ·
-        变更=change · 调整=adjust · 开工=start · 继续=continue · 状态=status
+        需求=requirement · 微改=minor-change · 添加=add-record · 交付=deliver · 整改=fix-bug ·
+        添加BUG=add-bug（记一条 BUG，`添加 BUG` 的快捷写法；修 BUG 用 整改=fix-bug） ·
+        变更=change · 调整=adjust · 开工=start · 继续=continue · 状态=status ·
+        接口摄取=api-ingest · 接口变动=api-changes · 接口比对=api-compare · 接口列表=api-list ·
+        组件解析=component-parse · 组件查=component-find · 组件登记=component-register ·
+        组件影响=component-impact · 组件比对=component-compare · 整合=integrate · 建卡=add-concept ·
+        文档检查=doc-check
 ```
 
 ## 安装

@@ -168,6 +168,23 @@ console.log("\n== 8. 开发模式：任务配对 ==");
 	const s2 = taskState(t2);
 	assert(s2.kind === "wait" && s2.label === "待开发", `未交付任务回落到需求状态（实际 ${s2.kind}/${s2.label}）`);
 	assert(extractFieldValue("- **交付日期**：2026-09-07\n", "交付日期") === "2026-09-07", "字段值提取正确");
+	// 字段留空是交付前的常态：正则必须行内匹配，否则跨行吞掉下一行（曾导致面板把待审核文档误判为已交付）
+	const emptyTpl = "## 基本信息\n- **状态**：待审核\n- **模块**：\n- **目标目录**：lib/features/finance\n- **提出日期**：\n- **交付日期**：\n\n## 需求描述\nX\n";
+	assert(extractFieldValue(emptyTpl, "交付日期") === "", "留空字段返回空串，不吞下一行");
+	assert(extractFieldValue(emptyTpl, "提出日期") === "", "留空字段不吞后面的同节字段");
+	assert(extractFieldValue(emptyTpl, "模块") === "" && extractFieldValue(emptyTpl, "目标目录") === "lib/features/finance", "留空字段后紧邻字段仍可正确取值");
+	assert(extractFieldValue("- **交付日期**：\r\n\r\n## 需求描述", "交付日期") === "", "CRLF 留空字段同样不跨行");
+	assert(extractFieldValue("- **状态**: 待审核\n", "状态") === "待审核", "半角冒号仍可取值");
+	assert(extractFieldValue("  - **状态**：开发中\n", "状态") === "开发中", "缩进子项仍可取值");
+	assert(extractFieldValue("- **说明**：改 *三处* 文案\n", "说明") === "改 三处 文案", "值内的强调标记仍被剥离");
+	assert(extractFieldValue("- **交付**：x\n- **交付日期**：2026-09-07\n", "交付日期") === "2026-09-07", "字段名互为前缀时不误匹配");
+	assert(extractFieldValue("- **状态**：待审核\n\n## 缺陷记录\n- **状态**：整改中\n", "状态") === "待审核", "同名字段取首个");
+	const wroteEmpty = setFieldValue(emptyTpl, "模块", "finance");
+	assert(wroteEmpty.includes("- **模块**：finance"), "留空字段可写回新值");
+	assert(wroteEmpty.includes("- **目标目录**：lib/features/finance"), "写回留空字段不吞下一行");
+	const wroteTail = setFieldValue(emptyTpl, "交付日期", "2026-09-10");
+	assert(wroteTail.includes("- **交付日期**：2026-09-10") && wroteTail.includes("## 需求描述"), "写回末位留空字段不吞空行与章节标题");
+	assert(setFieldValue(emptyTpl, "状态", "已通过").includes("- **状态**：已通过"), "已有值字段写回不变");
 	const nested = matchTasks(
 		[{ path: "lib/features/finance/开发需求/2026-09-07-充值.md", content: "- **状态**：待审核\n" }],
 		[],
@@ -207,6 +224,14 @@ console.log("\n== 8d. 缺陷统计（防复发回归清单） ==");
 		"开发文档",
 	);
 	assert(tasks[0].bugTotal === 2 && tasks[0].bugPending === 1, "统一文档任务带缺陷统计（2 条/1 未整改）");
+	// 「整改」「落实」留空但条目下方还有文字时，曾因 \s 跨行被误判为已完成（→ 面板漏掉缺陷、变更被当成已落地）
+	const trailingNote = "# t\n\n## 缺陷记录\n\n### 2026-09-07 15:00\n- 文案漏了一处\n- **整改**：\n- 备注：作者补了说明但还没修\n";
+	assert(JSON.stringify(countBugEntries(trailingNote)) === '{"total":1,"pending":1}', "整改留空且下方有文字=仍未整改");
+	const trailingFixed = trailingNote.replace("- **整改**：", "- **整改**：回到金额页");
+	assert(JSON.stringify(countBugEntries(trailingFixed)) === '{"total":1,"pending":0}', "整改填了内容=已修复（下方有文字不受影响）");
+	const pendingNote = "# t\n\n## 需求变更\n\n### 2026-09-07 15:00\n- 改文案\n- **落实**：\n- 备注：还没落地\n";
+	assert(hasPendingChange(pendingNote) === true, "落实留空且下方有文字=变更未落地");
+	assert(hasPendingChange(pendingNote.replace("- **落实**：", "- **落实**：改完了")) === false, "落实填了内容=变更已落地");
 }
 
 console.log("\n== 8b. 嵌套目录审核范围 ==");

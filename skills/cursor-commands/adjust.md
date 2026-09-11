@@ -1,8 +1,8 @@
 ---
-description: 调整 · Adjust — 处理「调整中」文档：按新需求重新生成需求文档（doc only）
+description: 调整 · Adjust — 处理「调整中」文档：按已记录意见重新生成需求文档（doc only）
 ---
 
-处理所有状态为「调整中」的开发文档 / process every doc in 调整中 status：把「补充需求」「需求变更」未落实条目合入需求/验收/边界，只改文档不改代码 / merge pending notes into the spec, doc only。完成后：需求阶段→`待审核`；对过代码→`变更中` 等变更落地 / requirement stage back to 待审核, post-code to 变更中。没有「调整中」文档但 adjustments/ 有待处理意见时按状态直接分流，不要停下来问 / if none in 调整中 but notes are pending, route by status without asking：变更中→`变更`；整改中→`整改`；旧档交付调整→`继续`。
+处理所有状态为「调整中」的开发文档 / process every doc in 调整中 status：把「补充需求」「需求变更」里**已记录**的未落实条目合入需求/验收/边界 / merge the **recorded** pending notes into the spec，只改文档不改代码 / doc only。**只处理有记录的，不管别的** / recorded notes only, nothing else：没有「调整中」文档或没有待落实条目就如实说明并停，不替作者编意见、不代跑其他指令 / if nothing recorded, say so and stop；扫到别的问题只一句话提示 / other findings get a one-line hint at most。完成后 / afterwards：需求阶段→`待审核`；对过代码→`变更中` 等变更落地 / requirement stage back to 待审核, post-code to 变更中。
 
 先加载并遵守技能 dev-review 的 SKILL.md：优先项目级 `.cursor/skills/dev-review/SKILL.md`（ZCode 为 `.zcode/skills/`），没有则读用户级 `~/.cursor/skills/dev-review/SKILL.md`（ZCode 为 `~/.zcode/skills/`）。
 

@@ -1,11 +1,11 @@
 ---
-description: 整改的别名：处理文档里已记录的缺陷（添加BUG [模块或文档]）
+description: 记一条 BUG 进「缺陷记录」并切「整改中」（添加BUG [模块或文档]）
 ---
 
-读开发文档「缺陷记录」里已有的条目并修复；不要另写一套 BUG 文档。
+`添加 BUG` 的快捷写法：按面板同款格式把作者口述的缺陷写进指定开发文档的「缺陷记录」顶部（`### 时间戳`＋症状＋`- **整改**：` 空占位，最新在前），状态切「整改中」。只写记录不修 BUG——修用 `整改`；定位不到文档就问，不新建。面板「撤回」不覆盖 AI 记的条目，记错让 AI 删。
 
 先加载并遵守技能 dev-review 的 SKILL.md：优先项目级 `.cursor/skills/dev-review/SKILL.md`（ZCode 为 `.zcode/skills/`），没有则读用户级 `~/.cursor/skills/dev-review/SKILL.md`（ZCode 为 `~/.zcode/skills/`）。
 
-执行 dev-review 的子命令「整改」（本命令 `添加BUG` 是它的别名），参数：$ARGUMENTS
+执行 dev-review 的子命令「添加」，按 `BUG` 类型记录（本命令 `添加BUG` 是 `添加 BUG` 的快捷写法），参数：$ARGUMENTS
 
 按技能执行，不要往仓库写模板文件。开发文档固定写在 `docs/开发文档/<模块>/`。
