@@ -250,7 +250,13 @@ export function removeLatestSectionEntry(content: string, heading: string): { co
 	const entryStart = section.search(/^###\s/m);
 	if (entryStart >= 0) {
 		const nextEntry = section.indexOf("\n### ", entryStart);
-		const blockEnd = nextEntry >= 0 ? nextEntry + 1 : section.length;
+		let blockEnd = nextEntry >= 0 ? nextEntry + 1 : section.length;
+		// 归档指针行不是条目：新条目插在标题下会把指针挤到条目后，撤回只删条目、指针留在节内
+		const pointerRel = section.slice(entryStart).search(/^> 已完成条目归档：/m);
+		if (pointerRel >= 0) {
+			const pointerAbs = entryStart + pointerRel;
+			if (nextEntry < 0 || pointerAbs < nextEntry) blockEnd = pointerAbs;
+		}
 		const removed = section.slice(entryStart, blockEnd);
 		const kept = section.slice(0, entryStart) + section.slice(blockEnd);
 		return { content: content.slice(0, bodyStart) + kept.replace(/\n{3,}/g, "\n\n") + rest, removed };

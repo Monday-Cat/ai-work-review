@@ -213,3 +213,4 @@
 .nr-diff-add .nr-diff-sign { color: #2ea043; font-weight: 700; }
 .nr-diff-del .nr-diff-sign { color: #da3633; font-weight: 700; }
 .nr-fix-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.nr-select { max-width: 12em; background: var(--background); color: var(--text-normal); }

@@ -331,6 +331,13 @@ assert(nextApproveStatus("调整", true) === "变更中", "交付后状态被改
 		assert(r2.removed.includes("2026-09-07 10:00"), "连续撤回能删到更早一条");
 		const r3 = removeLatestSectionEntry(r2.content, "## 需求变更");
 		assert(!r3.removed, "节里没条目时不改动");
+		// 新条目插在标题下会把归档指针挤到条目后：撤回只删条目、不吞指针行
+		const withPointer = "# t\n\n## 需求变更\n\n### 2026-09-09 09:00\n- 新变更\n- **落实**：\n\n> 已完成条目归档：[[x-归档]]\n\n## 缺陷记录\n";
+		const r5 = removeLatestSectionEntry(withPointer, "## 需求变更");
+		assert(r5.removed.includes("2026-09-09 09:00") && !r5.removed.includes("已完成条目归档"), "撤回删条目不吞归档指针行");
+		assert(r5.content.includes("> 已完成条目归档：[[x-归档]]"), "指针行保留在节内");
+		const r6 = removeLatestSectionEntry(r5.content, "## 需求变更");
+		assert(!r6.removed && r6.content.includes("> 已完成条目归档：[[x-归档]]"), "只剩指针时撤回不改动");
 		const supp = "# t\n\n## 补充需求\n- （2026-09-08 10:00）新要求\n- （2026-09-07 09:00）旧要求\n";
 		const r4 = removeLatestSectionEntry(supp, "## 补充需求");
 		assert(r4.removed.includes("2026-09-08 10:00") && r4.content.includes("旧要求"), "补充需求撤回删最新一条");

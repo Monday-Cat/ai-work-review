@@ -30,6 +30,8 @@ export class ReviewView extends ItemView {
 	private expanded = new Set<string>();
 	/** 任务行操作按钮（通过/缺陷/需求变更…）展开状态：默认收进「⋯」，处理该任务时才展开 */
 	private devActionsOpen = new Set<string>();
+	/** dev 模式资产页签当前页：文档 / 概念卡 / 归档 */
+	private devTab: "doc" | "concept" | "archive" = "doc";
 	private onlyIssues = false;
 	private currentPath: string | null = null;
 	private renderSeq = 0;
@@ -203,7 +205,39 @@ export class ReviewView extends ItemView {
 				return ka - kb || a.slug.localeCompare(b.slug, "zh-Hans-CN");
 			});
 
-		// ---- 统计 chips（按任务阶段） ----
+		this.renderActions(root);
+
+		// ---- 资产页签：文档 / 概念卡 / 归档 同级切换，专注哪块就划到哪块（在功能按钮行下方） ----
+		const mdFiles = this.app.vault.getMarkdownFiles();
+		const concepts = mdFiles.filter((f) => isUnderNamedFolder(f.path, "公用配置"));
+		const archives = mdFiles.filter((f) => isUnderNamedFolder(f.path, "归档") && !isUnderNamedFolder(f.path, "公用配置"));
+		if (seq !== this.renderSeq) return;
+		const tabRow = root.createDiv({ cls: "nr-modes" });
+		const tab = (key: "doc" | "concept" | "archive", label: string, n: number) => {
+			tabRow
+				.createEl("button", { cls: `nr-btn nr-btn-sm ${this.devTab === key ? "nr-btn-active" : ""}`, text: `${label}（${n}）` })
+				.addEventListener("click", () => {
+					if (this.devTab !== key) {
+						this.devTab = key;
+						void this.render();
+					}
+				});
+		};
+		tab("doc", t("dev.tabDocs"), tasks.length);
+		tab("concept", t("view.assetsConcept"), concepts.length);
+		tab("archive", t("view.assetsArchive"), archives.length);
+
+		const list = root.createDiv({ cls: "nr-list" });
+		if (this.devTab === "concept") {
+			await this.renderConceptList(list, concepts, seq);
+			return;
+		}
+		if (this.devTab === "archive") {
+			await this.renderArchiveList(list, archives, mdFiles, docFolder, seq);
+			return;
+		}
+
+		// ---- 文档页：统计 chips（按任务阶段） ----
 		const statRow = root.createDiv({ cls: "nr-stats" });
 		const counts = new Map<string, number>();
 		for (const tk of tasks) {
@@ -216,26 +250,84 @@ export class ReviewView extends ItemView {
 		const bugPending = tasks.reduce((n, tk) => n + (tk.bugPending ?? 0), 0);
 		if (bugPending > 0) statRow.createSpan({ cls: "nr-chip nr-chip-bug", text: t("dev.bugPendingChip", { n: bugPending }) });
 
-		this.renderActions(root);
-
-		const list = root.createDiv({ cls: "nr-list" });
 		const visible = this.onlyIssues ? tasks.filter((tk) => taskState(tk).kind !== "final") : tasks;
 		if (visible.length === 0) {
 			list.createDiv({ cls: "nr-empty", text: tasks.length === 0 ? t("dev.noTasks") : t("view.emptyFiltered") });
+		} else {
+			const groups = new Map<string, DevTask[]>();
+			for (const tk of visible) {
+				const g = tk.targetFolder || t("group.root");
+				const arr = groups.get(g) ?? [];
+				arr.push(tk);
+				groups.set(g, arr);
+			}
+			for (const [g, items] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-Hans-CN"))) {
+				// 组标题只显示模块名（路径末段），完整路径放悬停提示
+				const leaf = g.split("/").pop() || g;
+				list.createDiv({ cls: "nr-group-title", text: `${leaf}（${items.length}）`, title: g });
+				for (const tk of items) this.renderTaskRow(list, tk);
+			}
+		}
+	}
+
+	/** 概念卡页：公用配置下的卡，悬停显示卡内「定义」首行 */
+	private async renderConceptList(list: HTMLElement, concepts: TFile[], seq: number): Promise<void> {
+		if (concepts.length === 0) {
+			list.createDiv({ cls: "nr-empty", text: t("view.assetsEmpty") });
 			return;
 		}
-		const groups = new Map<string, DevTask[]>();
-		for (const tk of visible) {
-			const g = tk.targetFolder || t("group.root");
-			const arr = groups.get(g) ?? [];
-			arr.push(tk);
-			groups.set(g, arr);
+		for (const f of [...concepts].sort((a, b) => a.basename.localeCompare(b.basename, "zh-Hans-CN"))) {
+			const r = list.createDiv({ cls: "nr-file" });
+			if (f.path === this.currentPath) r.addClass("nr-file-current");
+			const head = r.createDiv({ cls: "nr-file-head" });
+			const nameEl = head.createSpan({ cls: "nr-file-name", text: f.basename });
+			nameEl.addEventListener("click", () => void this.plugin.openAt(f.path));
+			const def = (await this.app.vault.cachedRead(f)).split("\n").find((l) => l.trim().startsWith("- **定义**"));
+			if (seq !== this.renderSeq) return;
+			if (def) head.title = def.replace(/^-\s*\*\*定义\*\*[:：]\s*/, "").trim();
 		}
-		for (const [g, items] of [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-Hans-CN"))) {
-			// 组标题只显示模块名（路径末段），完整路径放悬停提示
-			const leaf = g.split("/").pop() || g;
-			list.createDiv({ cls: "nr-group-title", text: `${leaf}（${items.length}）`, title: g });
-			for (const tk of items) this.renderTaskRow(list, tk);
+	}
+
+	/** 归档页：按模块分组（与文档页模块组同款），行＝归档文件＋条目数＋「原文档」跳转 */
+	private async renderArchiveList(
+		list: HTMLElement,
+		archives: TFile[],
+		mdFiles: TFile[],
+		docFolder: string,
+		seq: number,
+	): Promise<void> {
+		if (archives.length === 0) {
+			list.createDiv({ cls: "nr-empty", text: t("view.assetsEmpty") });
+			return;
+		}
+		const docFiles = new Map<string, TFile>();
+		for (const o of mdFiles) {
+			if (isUnderNamedFolder(o.path, docFolder)) docFiles.set(`${o.parent?.name}/${o.basename}`, o);
+		}
+		const byModule = new Map<string, TFile[]>();
+		for (const f of archives) {
+			const mod = f.parent?.name ?? "—";
+			const arr = byModule.get(mod) ?? [];
+			arr.push(f);
+			byModule.set(mod, arr);
+		}
+		for (const [mod, files] of [...byModule.entries()].sort((a, b) => a[0].localeCompare(b[0], "zh-Hans-CN"))) {
+			list.createDiv({ cls: "nr-group-title", text: `${mod}（${files.length}）`, title: mod });
+			for (const f of files.sort((a, b) => a.basename.localeCompare(b.basename, "zh-Hans-CN"))) {
+				const r = list.createDiv({ cls: "nr-file" });
+				if (f.path === this.currentPath) r.addClass("nr-file-current");
+				const head = r.createDiv({ cls: "nr-file-head" });
+				const nameEl = head.createSpan({ cls: "nr-file-name", text: f.basename });
+				nameEl.addEventListener("click", () => void this.plugin.openAt(f.path));
+				const entries = (await this.app.vault.cachedRead(f)).match(/^###\s/gm)?.length ?? 0;
+				if (seq !== this.renderSeq) return;
+				if (entries > 0) head.createSpan({ cls: "nr-badge nr-badge-count", text: `${entries}` });
+				const origin = docFiles.get(`${mod}/${f.basename.replace(/-归档$/, "")}`);
+				if (origin) {
+					const link = head.createSpan({ cls: "nr-file-name nr-task-link", text: t("view.archiveOriginal") });
+					link.addEventListener("click", () => void this.plugin.openAt(origin.path));
+				}
+			}
 		}
 	}
 
@@ -393,12 +485,25 @@ export class ReviewView extends ItemView {
 		};
 		btn(t("action.recheck"), () => this.plugin.runRuleCheck(), "nr-btn-primary");
 		btn(t("action.ingest"), () => this.plugin.ingestBridge(true));
-		btn(t("action.copyReview"), () => this.plugin.copyAiPrompt());
-		btn(t("action.copyFix"), () => this.plugin.copyAiFixPrompt());
-		if (this.plugin.settings.mode === "dev") {
-			btn(t("action.copyReqAdjust"), () => this.plugin.copyReqAdjustPrompt());
-			btn(t("action.copyReqStart"), () => this.plugin.copyReqStartPrompt(), "nr-btn-primary");
-		}
+		// 指令复制收敛为一个下拉：选中即复制对应指令，选完复位
+		const copyOptions: Array<[string, () => Promise<void>]> = [
+			[t("action.copyReview"), () => this.plugin.copyAiPrompt()],
+			[t("action.copyFix"), () => this.plugin.copyAiFixPrompt()],
+			...(this.plugin.settings.mode === "dev"
+				? ([
+						[t("action.copyReqAdjust"), () => this.plugin.copyReqAdjustPrompt()],
+						[t("action.copyReqStart"), () => this.plugin.copyReqStartPrompt()],
+					] as Array<[string, () => Promise<void>]>)
+				: []),
+		];
+		const sel = actions.createEl("select", { cls: "nr-btn nr-select" });
+		sel.createEl("option", { value: "", text: t("action.copySelect") });
+		copyOptions.forEach(([label, fn], i) => sel.createEl("option", { value: String(i), text: label }));
+		sel.addEventListener("change", () => {
+			const opt = copyOptions[Number(sel.value)];
+			sel.value = "";
+			if (opt) void opt[1]();
+		});
 		actions
 			.createEl("button", { cls: `nr-btn ${this.onlyIssues ? "nr-btn-active" : ""}`, text: t("action.onlyIssues") })
 			.addEventListener("click", () => {
